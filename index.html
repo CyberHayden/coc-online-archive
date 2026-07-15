@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Church of Christ Online Archive</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1F4E78">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="COC Archive">
+<style>
+  :root{
+    --red:#B3202D;
+    --blue:#1F4E78;
+    --blue-dark:#153A57;
+    --white:#FFFFFF;
+    --bg:#F5F7FA;
+    --text:#1B2430;
+    --muted:#6B7684;
+    --border:#E1E6EC;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--text); padding-bottom:76px;
+  }
+  header.app-header{
+    background:var(--blue); color:var(--white); padding:18px 16px 16px;
+    display:flex; align-items:center; gap:10px;
+    position:sticky; top:0; z-index:10;
+  }
+  header.app-header img{width:36px;height:36px;border-radius:8px;background:var(--white);object-fit:cover;}
+  header.app-header .title{font-size:16px; font-weight:700; line-height:1.2;}
+  header.app-header .sub{font-size:11px; opacity:0.85;}
+  main{padding:14px;}
+  .screen{display:none;}
+  .screen.active{display:block;}
+
+  .searchbar{
+    display:flex; gap:8px; margin-bottom:12px;
+  }
+  .searchbar input{
+    flex:1; padding:12px 14px; border-radius:12px; border:1px solid var(--border);
+    font-size:15px; background:var(--white);
+  }
+  .btn{
+    border:none; border-radius:12px; padding:12px 16px; font-size:15px; font-weight:600;
+    cursor:pointer; color:var(--white); background:var(--blue);
+  }
+  .btn.red{background:var(--red);}
+  .btn.ghost{background:var(--white); color:var(--blue); border:1px solid var(--blue);}
+  .btn.block{width:100%;}
+  .btn:active{opacity:0.85;}
+
+  .card{
+    background:var(--white); border-radius:var(--radius); padding:14px; margin-bottom:10px;
+    border:1px solid var(--border); cursor:pointer;
+  }
+  .card .name{font-weight:700; font-size:16px;}
+  .card .meta{font-size:13px; color:var(--muted); margin-top:2px;}
+  .card .tag{
+    display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px;
+    background:#EAF1F8; color:var(--blue); margin-top:6px;
+  }
+  .empty{color:var(--muted); text-align:center; padding:40px 10px; font-size:14px;}
+
+  .detail-overlay{
+    position:fixed; inset:0; background:rgba(20,30,45,0.55); z-index:40;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .detail-overlay.show{display:flex;}
+  .sheet{
+    background:var(--white); width:100%; max-width:520px; border-radius:20px 20px 0 0;
+    padding:20px; max-height:88vh; overflow-y:auto;
+  }
+  .sheet h2{margin:0 0 4px; font-size:19px; color:var(--blue-dark);}
+  .sheet .field{margin-bottom:10px;}
+  .sheet label{font-size:12px; color:var(--muted); display:block; margin-bottom:4px; font-weight:600;}
+  .sheet input, .sheet select, .sheet textarea{
+    width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--border); font-size:15px;
+  }
+  .row-actions{display:flex; gap:10px; margin-top:16px;}
+  .close-x{position:absolute; top:14px; right:16px; background:none; border:none; font-size:22px; color:var(--muted); cursor:pointer;}
+  .sheet{position:relative;}
+
+  nav.bottom{
+    position:fixed; bottom:0; left:0; right:0; background:var(--white);
+    border-top:1px solid var(--border); display:flex; z-index:20;
+  }
+  nav.bottom button{
+    flex:1; border:none; background:none; padding:10px 4px 12px; font-size:11px; font-weight:600;
+    color:var(--muted); cursor:pointer;
+  }
+  nav.bottom button.active{color:var(--red);}
+  nav.bottom button .dot{
+    width:6px;height:6px;border-radius:50%;background:var(--red);margin:0 auto 4px;opacity:0;
+  }
+  nav.bottom button.active .dot{opacity:1;}
+
+  .popup-overlay{
+    position:fixed; inset:0; background:rgba(20,30,45,0.55); z-index:60;
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  .popup-overlay.show{display:flex;}
+  .popup{
+    background:var(--white); border-radius:16px; padding:20px; max-width:340px; width:100%;
+    border-top:6px solid var(--red);
+  }
+  .popup h3{margin:0 0 8px; color:var(--blue-dark); font-size:17px;}
+  .popup p{font-size:14px; color:var(--text); margin:4px 0;}
+
+  .snapshot-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;}
+  .stat{background:var(--white); border-radius:var(--radius); border:1px solid var(--border); padding:14px; text-align:center;}
+  .stat .num{font-size:24px; font-weight:800; color:var(--blue);}
+  .stat .label{font-size:11px; color:var(--muted); margin-top:2px;}
+
+  .filter-row{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
+  .filter-row select{padding:10px 12px; border-radius:10px; border:1px solid var(--border); font-size:14px; background:var(--white);}
+  .sync-status{font-size:11px; color:var(--muted); text-align:right; margin-top:-6px; margin-bottom:10px;}
+
+  .section-title{font-size:14px; font-weight:700; color:var(--blue-dark); margin:20px 0 10px;}
+  .chart-card{background:var(--white); border-radius:var(--radius); border:1px solid var(--border); padding:14px; margin-bottom:14px;}
+  .bar-row{display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px;}
+  .bar-row .bar-label{width:64px; color:var(--muted); flex-shrink:0;}
+  .bar-row .bar-track{flex:1; background:var(--bg); border-radius:6px; height:16px; overflow:hidden;}
+  .bar-row .bar-fill{height:100%; background:var(--blue); border-radius:6px;}
+  .bar-row.dept .bar-fill{background:var(--red);}
+  .bar-row .bar-count{width:28px; text-align:right; font-weight:700; color:var(--text); flex-shrink:0;}
+
+  .lock-overlay{
+    position:fixed; inset:0; background:var(--blue); z-index:100;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .lock-box{
+    background:var(--white); border-radius:18px; padding:28px 24px; max-width:340px; width:100%; text-align:center;
+  }
+  .lock-box img{width:64px;height:64px;border-radius:12px;margin-bottom:12px;}
+  .lock-box h2{margin:0 0 6px; color:var(--blue-dark); font-size:18px;}
+  .lock-box p{font-size:13px; color:var(--muted); margin:0 0 16px;}
+  .lock-box input{
+    width:100%; padding:14px; border-radius:10px; border:1px solid var(--border); font-size:18px;
+    text-align:center; letter-spacing:4px; margin-bottom:10px;
+  }
+  .lock-error{color:var(--red); font-size:13px; min-height:18px; margin-bottom:6px;}
+
+  .walk-overlay{
+    position:fixed; inset:0; background:rgba(20,30,45,0.7); z-index:90;
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .walk-overlay.show{display:flex;}
+  .walk-box{
+    background:var(--white); border-radius:18px; padding:26px 22px; max-width:340px; width:100%; text-align:center;
+  }
+  .walk-box .emoji{font-size:40px; margin-bottom:10px;}
+  .walk-box h3{margin:0 0 8px; color:var(--blue-dark); font-size:18px;}
+  .walk-box p{font-size:14px; color:var(--muted); margin:0 0 18px;}
+  .walk-dots{display:flex; gap:6px; justify-content:center; margin-bottom:16px;}
+  .walk-dots span{width:7px;height:7px;border-radius:50%;background:var(--border);}
+  .walk-dots span.active{background:var(--red);}
+  .walk-actions{display:flex; gap:10px;}
+</style>
+</head>
+<body>
+
+<!-- PASSCODE LOCK — covers the whole screen until the correct shared passcode is entered -->
+<div class="lock-overlay" id="lockOverlay">
+  <div class="lock-box">
+    <img src="icon-192.png" alt="logo" onerror="this.style.display='none'">
+    <h2>Church of Christ Online Archive</h2>
+    <p>Enter the team passcode to continue</p>
+    <input type="password" id="lockInput" inputmode="numeric" placeholder="••••" maxlength="12" autofocus>
+    <div class="lock-error" id="lockError"></div>
+    <button class="btn block" onclick="tryUnlock()">Unlock</button>
+  </div>
+</div>
+
+<!-- FIRST-OPEN WALKTHROUGH — shown once, skippable, after unlocking -->
+<div class="walk-overlay" id="walkOverlay">
+  <div class="walk-box" id="walkBox"></div>
+</div>
+
+<header class="app-header">
+  <img id="logoImg" src="icon-192.png" alt="logo" onerror="this.style.display='none'">
+  <div>
+    <div class="title">Church of Christ Online Archive</div>
+    <div class="sub" id="screenLabel">Members</div>
+  </div>
+</header>
+
+<main>
+  <div class="sync-status" id="syncStatus">Ready</div>
+
+  <!-- MEMBERS SCREEN -->
+  <section class="screen active" id="screen-members">
+    <div class="searchbar">
+      <input type="text" id="memberSearch" placeholder="Search a member's full name...">
+      <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
+      <button class="btn" onclick="openForm('Members', null)">+ Add</button>
+    </div>
+    <div class="filter-row">
+      <select id="deptFilter" onchange="renderList('Members', document.getElementById('memberSearch').value)">
+        <option value="">All departments</option>
+      </select>
+      <select id="attendanceFilter" onchange="renderList('Members', document.getElementById('memberSearch').value)">
+        <option value="">All members</option>
+        <option value="attended">Attended this month</option>
+        <option value="notattended">Not attended this month</option>
+      </select>
+    </div>
+    <div id="memberResults"></div>
+  </section>
+
+  <!-- ATTENDANCE SCREEN -->
+  <section class="screen" id="screen-attendance">
+    <div class="filter-row">
+      <label style="font-size:13px;color:var(--muted);font-weight:600;">Service:</label>
+      <select id="serviceFilter" onchange="renderAbsentees()">
+        <option value="">All services</option>
+        <option value="Sunday Service">Sunday Service</option>
+        <option value="Midweek Service">Midweek Service</option>
+        <option value="Special Program">Special Program</option>
+      </select>
+      <label style="font-size:13px;color:var(--muted);font-weight:600;">Streak:</label>
+      <select id="absentFilter" onchange="renderAbsentees()">
+        <option value="0">All members</option>
+        <option value="3">3+ weeks in a row</option>
+        <option value="5">5+ weeks in a row</option>
+      </select>
+      <button class="btn ghost" onclick="loadAll(true)" title="Refresh" style="margin-left:auto;">⟳</button>
+    </div>
+    <div id="absenteeResults"></div>
+
+    <div class="section-title">Absentees for one specific service</div>
+    <div class="chart-card">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="serviceReportDate">
+      </div>
+      <div class="field">
+        <label>Service</label>
+        <select id="serviceReportType">
+          <option value="Sunday Service">Sunday Service</option>
+          <option value="Midweek Service">Midweek Service</option>
+          <option value="Special Program">Special Program</option>
+        </select>
+      </div>
+      <button class="btn block" onclick="renderServiceAbsentees()">Show absentees for this service</button>
+    </div>
+    <div id="serviceAbsenteeResults"></div>
+  </section>
+
+  <!-- VISITORS SCREEN -->
+  <section class="screen" id="screen-visitors">
+    <div class="searchbar">
+      <input type="text" id="visitorSearch" placeholder="Search a visitor's full name...">
+      <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
+      <button class="btn" onclick="openForm('Visitors', null)">+ Add</button>
+    </div>
+    <div id="visitorResults"></div>
+  </section>
+
+  <!-- PROSPECTS SCREEN -->
+  <section class="screen" id="screen-prospects">
+    <div class="searchbar">
+      <input type="text" id="prospectSearch" placeholder="Search a prospect's full name...">
+      <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
+      <button class="btn" onclick="openForm('Prospects', null)">+ Add</button>
+    </div>
+    <div id="prospectResults"></div>
+  </section>
+
+  <!-- REPORTS SCREEN -->
+  <section class="screen" id="screen-reports">
+    <div class="snapshot-grid">
+      <div class="stat"><div class="num" id="statMembers">-</div><div class="label">Active members</div></div>
+      <div class="stat"><div class="num" id="statAttendanceToday">-</div><div class="label">Marked this week</div></div>
+      <div class="stat"><div class="num" id="statVisitors">-</div><div class="label">Visitors on file</div></div>
+      <div class="stat"><div class="num" id="statProspects">-</div><div class="label">Prospects on file</div></div>
+    </div>
+
+    <div class="filter-row">
+      <label style="font-size:13px;color:var(--muted);font-weight:600;">Year:</label>
+      <select id="analysisYear" onchange="renderAnalysis()">
+        <option value="all">All years</option>
+      </select>
+    </div>
+
+    <div class="section-title">Attendance trend (last 8 services)</div>
+    <div class="chart-card" id="attendanceTrendChart"></div>
+
+    <div class="section-title">Membership growth</div>
+    <div class="chart-card" id="growthChart"></div>
+
+    <div class="section-title">Members by department</div>
+    <div class="chart-card" id="deptChart"></div>
+
+    <button class="btn ghost block" onclick="loadAll(true)">Refresh data</button>
+    <button class="btn block" style="margin-top:10px;" onclick="exportCSV()">Export backup (CSV)</button>
+  </section>
+</main>
+
+<!-- Detail / Edit overlay -->
+<div class="detail-overlay" id="detailOverlay">
+  <div class="sheet" id="detailSheet"></div>
+</div>
+
+<!-- Popup for birthdays / alerts -->
+<div class="popup-overlay" id="popupOverlay">
+  <div class="popup" id="popupBody"></div>
+</div>
+
+<nav class="bottom">
+  <button class="active" onclick="showScreen('members')"><div class="dot"></div>Members</button>
+  <button onclick="showScreen('attendance')"><div class="dot"></div>Attendance</button>
+  <button onclick="showScreen('visitors')"><div class="dot"></div>Visitors</button>
+  <button onclick="showScreen('prospects')"><div class="dot"></div>Prospects</button>
+  <button onclick="showScreen('reports')"><div class="dot"></div>Reports</button>
+</nav>
+
+<script>
+/* ============ CONFIG ============ */
+const API_URL = "https://script.google.com/macros/s/AKfycbz4gBgh_qKofWUqIH-EPUoO1uQ97FPvV-QaqbuDniZWIPnn1aisdOZHTfIC6SdQqQTx1A/exec";
+
+// Shared passcode the admin team uses to open the app on their phones.
+// Change this before publishing, and share it only with your admin/usher team.
+const APP_PASSCODE = "2510";
+const LOCK_KEY = "coc_unlocked";
+
+function checkLock() {
+  if (localStorage.getItem(LOCK_KEY) === "yes") {
+    document.getElementById("lockOverlay").style.display = "none";
+    maybeShowWalkthrough();
+  } else {
+    document.getElementById("lockInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") tryUnlock();
+    });
+  }
+}
+function tryUnlock() {
+  const val = document.getElementById("lockInput").value;
+  if (val === APP_PASSCODE) {
+    localStorage.setItem(LOCK_KEY, "yes");
+    document.getElementById("lockOverlay").style.display = "none";
+    maybeShowWalkthrough();
+  } else {
+    document.getElementById("lockError").textContent = "Incorrect passcode — try again";
+  }
+}
+checkLock();
+
+/* ============ FIRST-OPEN WALKTHROUGH ============ */
+const WALK_KEY = "coc_walkthrough_seen";
+const WALK_STEPS = [
+  { emoji:"🔍", title:"Search, then tap", body:"Type a name in Members, Visitors, or Prospects. Tap the matching result to see their details." },
+  { emoji:"✅", title:"Mark attendance in one tap", body:"From a member's details, pick the service and tap Mark Present — this Sunday's attendance is logged instantly." },
+  { emoji:"✏️", title:"Tap again to edit", body:"Need to fix a spelling or update a phone number? Tap the name again and choose Edit details." },
+  { emoji:"🎂", title:"Alerts you'll see automatically", body:"Birthdays this week and absentee alerts pop up on their own — you don't need to go looking for them." }
+];
+let walkIndex = 0;
+function renderWalkStep() {
+  const s = WALK_STEPS[walkIndex];
+  document.getElementById("walkBox").innerHTML = `
+    <div class="emoji">${s.emoji}</div>
+    <h3>${s.title}</h3>
+    <p>${s.body}</p>
+    <div class="walk-dots">${WALK_STEPS.map((_,i)=>`<span class="${i===walkIndex?'active':''}"></span>`).join("")}</div>
+    <div class="walk-actions">
+      <button class="btn ghost block" onclick="skipWalkthrough()">Skip</button>
+      <button class="btn block" onclick="nextWalkStep()">${walkIndex===WALK_STEPS.length-1 ? "Got it" : "Next"}</button>
+    </div>
+  `;
+}
+function nextWalkStep() {
+  walkIndex++;
+  if (walkIndex >= WALK_STEPS.length) { skipWalkthrough(); return; }
+  renderWalkStep();
+}
+function skipWalkthrough() {
+  localStorage.setItem(WALK_KEY, "yes");
+  document.getElementById("walkOverlay").classList.remove("show");
+}
+function maybeShowWalkthrough() {
+  if (localStorage.getItem(WALK_KEY) !== "yes") {
+    walkIndex = 0;
+    renderWalkStep();
+    document.getElementById("walkOverlay").classList.add("show");
+  }
+}
+
+
+/* ============ STATE ============ */
+let cache = { Members: [], Attendance: [], Visitors: [], Prospects: [] };
+
+/* ============ OFFLINE QUEUE ============ */
+// Anything added/edited while offline gets stored here and replayed
+// automatically the moment the connection comes back.
+const QUEUE_KEY = "coc_pending_queue";
+
+function getQueue() {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; }
+  catch(e) { return []; }
+}
+function saveQueue(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+function queueAction(payload) {
+  const q = getQueue();
+  q.push({ payload, queuedAt: Date.now() });
+  saveQueue(q);
+  updateQueueBadge();
+}
+function updateQueueBadge() {
+  const q = getQueue();
+  if (q.length > 0) {
+    setSync(`${q.length} change${q.length>1?"s":""} saved offline — will sync when back online`);
+  }
+}
+
+async function flushQueue() {
+  let q = getQueue();
+  if (q.length === 0) return;
+  setSync(`Syncing ${q.length} offline change${q.length>1?"s":""}...`);
+  const remaining = [];
+  for (const item of q) {
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(item.payload)
+      });
+      await res.json(); // confirms it actually reached the server
+    } catch (err) {
+      remaining.push(item); // still offline or failed — keep it queued
+    }
+  }
+  saveQueue(remaining);
+  if (remaining.length === 0) {
+    setSync("All offline changes synced");
+    loadAll();
+  } else {
+    updateQueueBadge();
+  }
+}
+
+window.addEventListener("online", flushQueue);
+
+
+/* ============ API HELPERS ============ */
+async function apiGet(action, sheet, extra) {
+  const params = new URLSearchParams({ action, sheet, ...(extra || {}) });
+  const res = await fetch(API_URL + "?" + params.toString());
+  return res.json();
+}
+async function apiPost(payload, optimisticUpdate) {
+  if (optimisticUpdate) optimisticUpdate(); // update the on-screen list immediately, don't wait on the network
+  if (!navigator.onLine) {
+    queueAction(payload);
+    return { success: true, offline: true };
+  }
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  } catch (err) {
+    // fetch itself failed (e.g. signal dropped mid-request) — queue it rather than lose it
+    queueAction(payload);
+    return { success: true, offline: true };
+  }
+}
+
+function setSync(msg) { document.getElementById("syncStatus").textContent = msg; }
+
+/* ============ NAVIGATION ============ */
+function showScreen(name) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById("screen-" + name).classList.add("active");
+  document.querySelectorAll("nav.bottom button").forEach(b => b.classList.remove("active"));
+  event.currentTarget.classList.add("active");
+  document.getElementById("screenLabel").textContent = name.charAt(0).toUpperCase() + name.slice(1);
+  if (name === "attendance") {
+    const dateInput = document.getElementById("serviceReportDate");
+    if (dateInput && !dateInput.value) dateInput.value = getSundaysDescending(1)[0];
+    renderAbsentees();
+  }
+  if (name === "reports") renderSnapshot();
+}
+
+/* ============ LOAD DATA ============ */
+async function loadAll(manual) {
+  setSync("Syncing...");
+  try {
+    const [m, a, v, p] = await Promise.all([
+      apiGet("getAll", "Members"),
+      apiGet("getAll", "Attendance"),
+      apiGet("getAll", "Visitors"),
+      apiGet("getAll", "Prospects")
+    ]);
+    cache.Members = m.data || [];
+    cache.Attendance = a.data || [];
+    cache.Visitors = v.data || [];
+    cache.Prospects = p.data || [];
+    const now = new Date();
+    setSync("Last synced " + now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+    refreshDeptFilterOptions();
+    renderList("Members");
+    renderList("Visitors");
+    renderList("Prospects");
+    checkPopups();
+  } catch (err) {
+    setSync("Offline — showing last saved data");
+  }
+}
+
+/* ============ SEARCH + LIST RENDER ============ */
+function fullName(r){ return ((r.FirstName||"") + " " + (r.Surname||"")).trim(); }
+
+function renderList(sheet, filterText) {
+  const containerId = { Members:"memberResults", Visitors:"visitorResults", Prospects:"prospectResults" }[sheet];
+  const container = document.getElementById(containerId);
+  let rows = cache[sheet] || [];
+  if (filterText) {
+    const q = filterText.toLowerCase();
+    rows = rows.filter(r => fullName(r).toLowerCase().includes(q));
+  }
+  if (sheet === "Members") {
+    const deptFilter = document.getElementById("deptFilter");
+    if (deptFilter && deptFilter.value) {
+      rows = rows.filter(r => (r.Department || "") === deptFilter.value);
+    }
+    const attFilter = document.getElementById("attendanceFilter");
+    if (attFilter && attFilter.value) {
+      const now = new Date();
+      const attendedThisMonthIds = new Set(
+        cache.Attendance
+          .filter(a => { const d = new Date(a.Date); return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth(); })
+          .map(a => String(a.MemberID))
+      );
+      if (attFilter.value === "attended") rows = rows.filter(r => attendedThisMonthIds.has(String(r.ID)));
+      if (attFilter.value === "notattended") rows = rows.filter(r => !attendedThisMonthIds.has(String(r.ID)));
+    }
+    rows = rows.slice().sort((a,b) => fullName(a).localeCompare(fullName(b)));
+  }
+  if (rows.length === 0) {
+    container.innerHTML = `<div class="empty">${filterText ? "No match found" : "No records yet — tap + Add to create one"}</div>`;
+    return;
+  }
+  container.innerHTML = rows.map(r => `
+    <div class="card" onclick='openDetail("${sheet}", ${JSON.stringify(r.ID)})'>
+      <div class="name">${fullName(r) || "(no name)"}</div>
+      <div class="meta">${r.Phone || ""}</div>
+      ${sheet==="Visitors" ? `<span class="tag">${r.FollowUpStatus||"Not contacted"}</span>` : ""}
+      ${sheet==="Prospects" ? `<span class="tag">${r.InterestStatus||"New"}</span>` : ""}
+      ${sheet==="Members" ? `<span class="tag">${r.Department||"No department"}</span>` : ""}
+    </div>
+  `).join("");
+}
+
+function refreshDeptFilterOptions() {
+  const select = document.getElementById("deptFilter");
+  if (!select) return;
+  const current = select.value;
+  const depts = Array.from(new Set((cache.Members||[]).map(m => m.Department).filter(Boolean))).sort();
+  select.innerHTML = `<option value="">All departments</option>` + depts.map(d => `<option value="${d}">${d}</option>`).join("");
+  select.value = current;
+}
+
+["memberSearch","visitorSearch","prospectSearch"].forEach(id => {
+  document.getElementById(id).addEventListener("input", (e) => {
+    const sheet = { memberSearch:"Members", visitorSearch:"Visitors", prospectSearch:"Prospects" }[id];
+    renderList(sheet, e.target.value);
+  });
+});
+
+/* ============ DETAIL / MARK / EDIT ============ */
+function findRecord(sheet, id) {
+  return (cache[sheet]||[]).find(r => String(r.ID) === String(id));
+}
+
+function openDetail(sheet, id) {
+  const r = findRecord(sheet, id);
+  if (!r) return;
+  const today = new Date().toISOString().slice(0,10);
+
+  let extraAction = "";
+  if (sheet === "Members") {
+    extraAction = `
+      <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px;">Service</label>
+      <select id="serviceTypeSelect" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--border);font-size:15px;margin-bottom:10px;">
+        <option value="Sunday Service">Sunday Service</option>
+        <option value="Midweek Service">Midweek Service</option>
+        <option value="Special Program">Special Program</option>
+      </select>
+      <button class="btn block" onclick='markAttendance("${r.ID}")'>Mark Present — ${today}</button>`;
+  } else if (sheet === "Visitors") {
+    extraAction = `<button class="btn block" onclick='moveRecord("Visitors","Members","${r.ID}")'>Move to Member Register</button>`;
+  } else if (sheet === "Prospects") {
+    extraAction = `<button class="btn block" onclick='moveRecord("Prospects","Visitors","${r.ID}")'>Move to Visitors Register</button>`;
+  }
+
+  document.getElementById("detailSheet").innerHTML = `
+    <button class="close-x" onclick="closeDetail()">&times;</button>
+    <h2>${fullName(r)}</h2>
+    <p style="color:var(--muted);font-size:13px;margin-top:0;">${r.Phone||""}</p>
+    ${sheet==="Members" ? `
+      <div style="font-size:13px;color:var(--text);background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+        ${r.Occupation ? `<div><strong>Occupation:</strong> ${r.Occupation}</div>` : ""}
+        ${r.MaritalStatus ? `<div><strong>Marital status:</strong> ${r.MaritalStatus}</div>` : ""}
+        ${(r.EmergencyContactName || r.EmergencyContactPhone) ? `
+          <div style="margin-top:6px;"><strong>Emergency contact:</strong><br>
+          ${r.EmergencyContactName||""} ${r.EmergencyContactRelationship?`(${r.EmergencyContactRelationship})`:""}<br>
+          ${r.EmergencyContactPhone||""}</div>` : ""}
+      </div>` : ""}
+    <div style="margin:14px 0;">${extraAction}</div>
+    <button class="btn ghost block" onclick='openForm("${sheet}", "${r.ID}")'>Edit details</button>
+    <button class="btn red block" style="margin-top:10px;" onclick='confirmDelete("${sheet}", "${r.ID}", ${JSON.stringify(fullName(r))})'>Delete record</button>
+  `;
+  document.getElementById("detailOverlay").classList.add("show");
+}
+function closeDetail(){ document.getElementById("detailOverlay").classList.remove("show"); }
+
+async function markAttendance(memberId) {
+  const today = new Date().toISOString().slice(0,10);
+  const serviceType = (document.getElementById("serviceTypeSelect") || {}).value || "Sunday Service";
+  setSync("Saving attendance...");
+  const result = await apiPost(
+    { action:"markAttendance", memberId, date:today, serviceType, markedBy:"App User" },
+    () => cache.Attendance.push({ ID:"pending", MemberID:memberId, Date:today, ServiceType:serviceType, MarkedBy:"App User" })
+  );
+  if (!result.offline) { setSync("Attendance saved"); loadAll(); }
+  closeDetail();
+}
+
+async function moveRecord(fromSheet, toSheet, id) {
+  const r = findRecord(fromSheet, id);
+  if (!r) return;
+  setSync("Moving record...");
+  const data = { FirstName:r.FirstName, Surname:r.Surname, Phone:r.Phone };
+  const result = await apiPost({ action:"move", fromSheet, toSheet, id, data });
+  if (!result.offline) { setSync("Moved"); loadAll(); }
+  else { setSync("Move saved offline — will sync when back online"); }
+  closeDetail();
+}
+
+/* ============ DELETE ============ */
+function confirmDelete(sheet, id, name) {
+  if (!confirm(`Delete ${name || "this record"} from ${sheet}? This can't be undone — consider exporting a backup first if you're not sure.`)) {
+    return;
+  }
+  deleteRecord(sheet, id);
+}
+async function deleteRecord(sheet, id) {
+  setSync("Deleting...");
+  const result = await apiPost(
+    { action:"delete", sheet, id },
+    () => { cache[sheet] = (cache[sheet]||[]).filter(r => String(r.ID) !== String(id)); renderList(sheet); }
+  );
+  if (!result.offline) { setSync("Deleted"); loadAll(); }
+  else { setSync("Delete saved offline — will sync when back online"); }
+  closeDetail();
+}
+
+/* ============ ADD / EDIT FORM ============ */
+const FORM_FIELDS = {
+  Members: ["FirstName","Surname","Phone","Address","Birthdate","Department","JoinDate","Status","Occupation","MaritalStatus","EmergencyContactName","EmergencyContactPhone","EmergencyContactRelationship"],
+  Visitors: ["FirstName","Surname","Phone","Address","DateVisited","InvitedBy","FollowUpStatus","Notes"],
+  Prospects: ["FirstName","Surname","Phone","Location","DateContacted","ContactedBy","InterestStatus","Notes"]
+};
+
+function openForm(sheet, id) {
+  const existing = id ? findRecord(sheet, id) : {};
+  const fields = FORM_FIELDS[sheet];
+  const DATE_FIELDS = ["Birthdate", "JoinDate", "DateVisited", "DateContacted"];
+  const LABELS = {
+    EmergencyContactName: "Emergency contact — name",
+    EmergencyContactPhone: "Emergency contact — phone",
+    EmergencyContactRelationship: "Emergency contact — relationship",
+    MaritalStatus: "Marital status"
+  };
+  const fieldHTML = (f) => {
+    const label = LABELS[f] || f;
+    if (f === "MaritalStatus") {
+      const opts = ["", "Single", "Married", "Widowed"];
+      return `<div class="field"><label>${label}</label>
+        <select name="${f}">
+          ${opts.map(o => `<option value="${o}" ${existing[f]===o?"selected":""}>${o||"Select..."}</option>`).join("")}
+        </select></div>`;
+    }
+    return `<div class="field"><label>${label}</label>
+      <input type="${DATE_FIELDS.includes(f) ? "date" : "text"}" name="${f}" value="${existing[f]||""}"></div>`;
+  };
+  document.getElementById("detailSheet").innerHTML = `
+    <button class="close-x" onclick="closeDetail()">&times;</button>
+    <h2>${id ? "Edit" : "Add"} ${sheet.slice(0,-1)}</h2>
+    <form id="recordForm">
+      ${fields.map(fieldHTML).join("")}
+      <div class="row-actions">
+        <button type="button" class="btn ghost block" onclick="closeDetail()">Cancel</button>
+        <button type="submit" class="btn block">Save</button>
+      </div>
+    </form>
+  `;
+  document.getElementById("recordForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = {};
+    fields.forEach(f => data[f] = e.target[f].value);
+    setSync("Saving...");
+    let result;
+    if (id) {
+      result = await apiPost(
+        { action:"update", sheet, id, data },
+        () => { Object.assign(findRecord(sheet, id) || {}, data); renderList(sheet); }
+      );
+    } else {
+      const newFullName = ((data.FirstName||"") + " " + (data.Surname||"")).trim().toLowerCase();
+      const possibleDupe = (cache[sheet]||[]).find(r => fullName(r).toLowerCase() === newFullName);
+      if (possibleDupe && !confirm(`"${newFullName}" looks like it might already be in ${sheet} (${possibleDupe.Phone||"no phone on file"}). Add anyway?`)) {
+        return;
+      }
+      const tempId = "pending-" + Date.now();
+      result = await apiPost(
+        { action:"add", sheet, data },
+        () => { cache[sheet].push({ ID: tempId, ...data }); renderList(sheet); }
+      );
+    }
+    if (!result.offline) { setSync("Saved"); loadAll(); }
+    else { setSync("Saved offline — will appear for others once you're back online"); }
+    closeDetail();
+  });
+  document.getElementById("detailOverlay").classList.add("show");
+}
+
+/* ============ ABSENTEE STREAK FILTER ============ */
+function getSundaysDescending(count) {
+  const dates = [];
+  const d = new Date();
+  d.setDate(d.getDate() - d.getDay()); // back to most recent Sunday
+  for (let i=0;i<count;i++){
+    dates.push(new Date(d).toISOString().slice(0,10));
+    d.setDate(d.getDate()-7);
+  }
+  return dates;
+}
+
+function renderAbsentees() {
+  const threshold = parseInt(document.getElementById("absentFilter").value, 10);
+  const serviceType = document.getElementById("serviceFilter").value; // "" = all services
+  const container = document.getElementById("absenteeResults");
+  if (threshold === 0) {
+    container.innerHTML = cache.Members.map(m => `
+      <div class="card"><div class="name">${fullName(m)}</div><div class="meta">${m.Department||""}</div></div>
+    `).join("") || `<div class="empty">No members yet</div>`;
+    return;
+  }
+  const recentSundays = getSundaysDescending(threshold);
+  const attendedSet = {};
+  cache.Attendance.forEach(a => {
+    if (serviceType && a.ServiceType !== serviceType) return; // only count the selected service type
+    if (recentSundays.includes(String(a.Date).slice(0,10))) {
+      attendedSet[a.MemberID] = attendedSet[a.MemberID] || new Set();
+      attendedSet[a.MemberID].add(String(a.Date).slice(0,10));
+    }
+  });
+  const absentees = cache.Members.filter(m => !(attendedSet[m.ID] && attendedSet[m.ID].size > 0));
+  const serviceLabel = serviceType || "any service";
+  if (absentees.length === 0) {
+    container.innerHTML = `<div class="empty">No one has missed ${threshold}+ weeks in a row for ${serviceLabel} 🎉</div>`;
+    return;
+  }
+  container.innerHTML = absentees.map(m => `
+    <div class="card">
+      <div class="name">${fullName(m)}</div>
+      <div class="meta">${m.Phone||""}</div>
+      <span class="tag" style="background:#FCEBEC;color:var(--red);">Absent ${threshold}+ weeks (${serviceLabel})</span>
+    </div>
+  `).join("");
+}
+
+/* ============ PER-SERVICE ABSENTEE REPORT ============ */
+// Answers "who did we NOT mark present for this exact date + service".
+function renderServiceAbsentees() {
+  const date = document.getElementById("serviceReportDate").value;
+  const serviceType = document.getElementById("serviceReportType").value;
+  const container = document.getElementById("serviceAbsenteeResults");
+  if (!date) { container.innerHTML = `<div class="empty">Pick a date to generate this report</div>`; return; }
+
+  const presentIds = new Set(
+    cache.Attendance
+      .filter(a => String(a.Date).slice(0,10) === date && a.ServiceType === serviceType)
+      .map(a => String(a.MemberID))
+  );
+  const absentees = cache.Members.filter(m => !presentIds.has(String(m.ID)));
+  const dateLabel = new Date(date).toLocaleDateString([], {month:"short", day:"numeric", year:"numeric"});
+
+  if (absentees.length === 0) {
+    container.innerHTML = `<div class="empty">Everyone was marked present for ${serviceType} on ${dateLabel} 🎉</div>`;
+    return;
+  }
+  container.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${absentees.length} absent — ${serviceType}, ${dateLabel}</div>
+    ${absentees.map(m => `
+      <div class="card">
+        <div class="name">${fullName(m)}</div>
+        <div class="meta">${m.Phone||""}</div>
+      </div>
+    `).join("")}
+  `;
+}
+
+/* ============ CSV EXPORT (BACKUP) ============ */
+function toCSV(rows) {
+  if (!rows || rows.length === 0) return "";
+  const headers = Object.keys(rows[0]).filter(k => k !== "_row");
+  const escape = (v) => `"${String(v ?? "").replace(/"/g,'""')}"`;
+  const lines = [headers.join(",")];
+  rows.forEach(r => lines.push(headers.map(h => escape(r[h])).join(",")));
+  return lines.join("\n");
+}
+function downloadFile(filename, content) {
+  const blob = new Blob([content], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function exportCSV() {
+  const dateStamp = new Date().toISOString().slice(0,10);
+  ["Members","Attendance","Visitors","Prospects"].forEach(sheet => {
+    const csv = toCSV(cache[sheet]);
+    if (csv) downloadFile(`${sheet}-backup-${dateStamp}.csv`, csv);
+  });
+  setSync("Backup files downloaded");
+}
+
+/* ============ REPORTS SNAPSHOT ============ */
+function renderSnapshot() {
+  document.getElementById("statMembers").textContent = cache.Members.length;
+  document.getElementById("statVisitors").textContent = cache.Visitors.length;
+  document.getElementById("statProspects").textContent = cache.Prospects.length;
+  const sundays = getSundaysDescending(1);
+  const thisWeek = cache.Attendance.filter(a => sundays.includes(String(a.Date).slice(0,10)));
+  document.getElementById("statAttendanceToday").textContent = thisWeek.length;
+  refreshYearFilterOptions();
+  renderAnalysis();
+}
+
+function refreshYearFilterOptions() {
+  const select = document.getElementById("analysisYear");
+  if (!select) return;
+  const current = select.value;
+  const years = new Set();
+  cache.Members.forEach(m => { if (m.JoinDate) { const y = new Date(m.JoinDate).getFullYear(); if (!isNaN(y)) years.add(y); } });
+  cache.Attendance.forEach(a => { if (a.Date) { const y = new Date(a.Date).getFullYear(); if (!isNaN(y)) years.add(y); } });
+  const sorted = Array.from(years).sort((a,b) => b-a);
+  select.innerHTML = `<option value="all">All years</option>` + sorted.map(y => `<option value="${y}">${y}</option>`).join("");
+  select.value = sorted.includes(parseInt(current)) ? current : "all";
+}
+
+function barChart(containerId, rows, extraClass) {
+  const container = document.getElementById(containerId);
+  if (rows.length === 0) { container.innerHTML = `<div class="empty" style="padding:10px;">No data yet</div>`; return; }
+  const max = Math.max(...rows.map(r => r.count), 1);
+  container.innerHTML = rows.map(r => `
+    <div class="bar-row ${extraClass||''}">
+      <div class="bar-label">${r.label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(r.count/max*100).toFixed(0)}%;"></div></div>
+      <div class="bar-count">${r.count}</div>
+    </div>
+  `).join("");
+}
+
+function renderAnalysis() {
+  if (!cache.Members.length && !cache.Attendance.length) return;
+  const yearSelect = document.getElementById("analysisYear");
+  const selectedYear = yearSelect ? yearSelect.value : "all";
+
+  // Attendance trend — last 8 recorded Sundays, count of unique members present
+  const sundays = getSundaysDescending(8).reverse();
+  const trendRows = sundays.map(dateStr => {
+    const count = cache.Attendance.filter(a => String(a.Date).slice(0,10) === dateStr).length;
+    const label = new Date(dateStr).toLocaleDateString([], {month:"short", day:"numeric"});
+    return { label, count };
+  });
+  barChart("attendanceTrendChart", trendRows);
+
+  // Membership growth — by month if a year is selected, otherwise by year
+  let growthRows;
+  if (selectedYear !== "all") {
+    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    growthRows = monthNames.map((label, idx) => {
+      const count = cache.Members.filter(m => {
+        if (!m.JoinDate) return false;
+        const d = new Date(m.JoinDate);
+        return d.getFullYear() === parseInt(selectedYear) && d.getMonth() === idx;
+      }).length;
+      return { label, count };
+    });
+  } else {
+    const years = {};
+    cache.Members.forEach(m => {
+      if (!m.JoinDate) return;
+      const y = new Date(m.JoinDate).getFullYear();
+      if (isNaN(y)) return;
+      years[y] = (years[y]||0) + 1;
+    });
+    growthRows = Object.keys(years).sort().map(y => ({ label:y, count:years[y] }));
+  }
+  barChart("growthChart", growthRows);
+
+  // Department breakdown
+  const depts = {};
+  cache.Members.forEach(m => {
+    const d = m.Department || "None";
+    depts[d] = (depts[d]||0) + 1;
+  });
+  const deptRows = Object.keys(depts).sort((a,b) => depts[b]-depts[a]).map(d => ({ label:d, count:depts[d] }));
+  barChart("deptChart", deptRows, "dept");
+}
+
+/* ============ POPUPS: BIRTHDAYS + ABSENTEE ALERTS ============ */
+function checkPopups() {
+  const today = new Date();
+  const mm = today.getMonth()+1, dd = today.getDate();
+  const upcoming = cache.Members.filter(m => {
+    if (!m.Birthdate) return false;
+    const d = new Date(m.Birthdate);
+    const diff = (new Date(today.getFullYear(), d.getMonth(), d.getDate()) - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000;
+    return diff >= 0 && diff <= 7;
+  });
+  if (upcoming.length > 0) {
+    document.getElementById("popupBody").innerHTML = `
+      <h3>🎉 Birthdays this week</h3>
+      ${upcoming.map(m => `<p>${fullName(m)}</p>`).join("")}
+      <button class="btn block" style="margin-top:12px;" onclick="closePopup()">Got it</button>
+    `;
+    document.getElementById("popupOverlay").classList.add("show");
+  }
+}
+function closePopup(){ document.getElementById("popupOverlay").classList.remove("show"); }
+
+/* ============ INIT ============ */
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js").catch(()=>{});
+}
+loadAll();
+updateQueueBadge();
+
+// Refresh the moment the phone gets signal back — flushQueue() above already
+// runs first (registered separately), this pulls fresh data right after.
+window.addEventListener("online", () => setTimeout(() => loadAll(), 1500));
+window.addEventListener("offline", () => setSync("Offline — changes will be saved and synced later"));
+
+// Quiet background refresh every 60s while the app is open and online,
+// so two people using it during the same service catch up automatically.
+setInterval(() => { if (navigator.onLine && getQueue().length === 0) loadAll(); }, 60000);
+</script>
+</body>
+</html>
