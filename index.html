@@ -130,6 +130,19 @@
   .bar-row.dept .bar-fill{background:var(--red);}
   .bar-row .bar-count{width:28px; text-align:right; font-weight:700; color:var(--text); flex-shrink:0;}
 
+  .print-only{display:none;}
+  @media print {
+    body{padding-bottom:0; background:white;}
+    .lock-overlay, .walk-overlay, .name-overlay, .detail-overlay, .popup-overlay,
+    nav.bottom, header.app-header, .searchbar button, .filter-row, .sync-status,
+    button{display:none !important;}
+    .print-only{display:block !important; margin-bottom:16px;}
+    .print-only h2{margin:0 0 2px; color:var(--blue-dark);}
+    .print-only .meta{font-size:12px; color:var(--muted);}
+    .card{break-inside:avoid; border:1px solid #ccc;}
+    main{padding:0;}
+  }
+
   .lock-overlay{
     position:fixed; inset:0; background:var(--blue); z-index:100;
     display:flex; align-items:center; justify-content:center; padding:24px;
@@ -145,6 +158,11 @@
     text-align:center; letter-spacing:4px; margin-bottom:10px;
   }
   .lock-error{color:var(--red); font-size:13px; min-height:18px; margin-bottom:6px;}
+  .name-overlay{
+    position:fixed; inset:0; background:var(--blue); z-index:95;
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .name-overlay.show{display:flex;}
 
   .walk-overlay{
     position:fixed; inset:0; background:rgba(20,30,45,0.7); z-index:90;
@@ -182,6 +200,16 @@
   <div class="walk-box" id="walkBox"></div>
 </div>
 
+<!-- ADMIN NAME CAPTURE — asked once per device, so records show who did what -->
+<div class="name-overlay" id="nameOverlay">
+  <div class="lock-box">
+    <h2>Quick one before you start</h2>
+    <p>What's your name? This gets attached to attendance you mark, so records show who did what.</p>
+    <input type="text" id="nameInput" placeholder="Your name" autofocus>
+    <button class="btn block" onclick="saveAdminName()">Continue</button>
+  </div>
+</div>
+
 <header class="app-header">
   <img id="logoImg" src="icon-192.png" alt="logo" onerror="this.style.display='none'">
   <div>
@@ -191,6 +219,10 @@
 </header>
 
 <main>
+  <div class="print-only" id="printHeader">
+    <h2>Church of Christ Online Archive</h2>
+    <div class="meta" id="printSubtitle"></div>
+  </div>
   <div class="sync-status" id="syncStatus">Ready</div>
 
   <!-- MEMBERS SCREEN -->
@@ -198,6 +230,7 @@
     <div class="searchbar">
       <input type="text" id="memberSearch" placeholder="Search a member's full name...">
       <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
+      <button class="btn ghost" onclick="printScreen('Members')" title="Print">🖶</button>
       <button class="btn" onclick="openForm('Members', null)">+ Add</button>
     </div>
     <div class="filter-row">
@@ -230,6 +263,7 @@
         <option value="5">5+ weeks in a row</option>
       </select>
       <button class="btn ghost" onclick="loadAll(true)" title="Refresh" style="margin-left:auto;">⟳</button>
+      <button class="btn ghost" onclick="printScreen('Attendance')" title="Print">🖶</button>
     </div>
     <div id="absenteeResults"></div>
 
@@ -257,6 +291,7 @@
     <div class="searchbar">
       <input type="text" id="visitorSearch" placeholder="Search a visitor's full name...">
       <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
+      <button class="btn ghost" onclick="printScreen('Visitors')" title="Print">🖶</button>
       <button class="btn" onclick="openForm('Visitors', null)">+ Add</button>
     </div>
     <div id="visitorResults"></div>
@@ -267,6 +302,7 @@
     <div class="searchbar">
       <input type="text" id="prospectSearch" placeholder="Search a prospect's full name...">
       <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
+      <button class="btn ghost" onclick="printScreen('Prospects')" title="Print">🖶</button>
       <button class="btn" onclick="openForm('Prospects', null)">+ Add</button>
     </div>
     <div id="prospectResults"></div>
@@ -297,7 +333,17 @@
     <div class="section-title">Members by department</div>
     <div class="chart-card" id="deptChart"></div>
 
+    <div class="section-title">Members by gender</div>
+    <div class="chart-card" id="genderChart"></div>
+
+    <div class="section-title">Recent activity</div>
+    <div class="chart-card" style="padding:8px;">
+      <button class="btn ghost block" style="margin-bottom:8px;" onclick="loadAuditLog()">Load recent activity</button>
+      <div id="auditResults"></div>
+    </div>
+
     <button class="btn ghost block" onclick="loadAll(true)">Refresh data</button>
+    <button class="btn ghost block" style="margin-top:10px;" onclick="printScreen('Reports')">Print this report 🖶</button>
     <button class="btn block" style="margin-top:10px;" onclick="exportCSV()">Export backup (CSV)</button>
   </section>
 </main>
@@ -329,10 +375,27 @@ const API_URL = "https://script.google.com/macros/s/AKfycbz4gBgh_qKofWUqIH-EPUoO
 const APP_PASSCODE = "2510";
 const LOCK_KEY = "coc_unlocked";
 
+const ADMIN_NAME_KEY = "coc_admin_name";
+function getAdminName() { return localStorage.getItem(ADMIN_NAME_KEY) || ""; }
+function saveAdminName() {
+  const val = document.getElementById("nameInput").value.trim();
+  if (!val) return;
+  localStorage.setItem(ADMIN_NAME_KEY, val);
+  document.getElementById("nameOverlay").classList.remove("show");
+  maybeShowWalkthrough();
+}
+function checkAdminName() {
+  if (getAdminName()) {
+    maybeShowWalkthrough();
+  } else {
+    document.getElementById("nameOverlay").classList.add("show");
+  }
+}
+
 function checkLock() {
   if (localStorage.getItem(LOCK_KEY) === "yes") {
     document.getElementById("lockOverlay").style.display = "none";
-    maybeShowWalkthrough();
+    checkAdminName();
   } else {
     document.getElementById("lockInput").addEventListener("keydown", (e) => {
       if (e.key === "Enter") tryUnlock();
@@ -344,7 +407,7 @@ function tryUnlock() {
   if (val === APP_PASSCODE) {
     localStorage.setItem(LOCK_KEY, "yes");
     document.getElementById("lockOverlay").style.display = "none";
-    maybeShowWalkthrough();
+    checkAdminName();
   } else {
     document.getElementById("lockError").textContent = "Incorrect passcode — try again";
   }
@@ -625,13 +688,32 @@ function closeDetail(){ document.getElementById("detailOverlay").classList.remov
 async function markAttendance(memberId) {
   const today = new Date().toISOString().slice(0,10);
   const serviceType = (document.getElementById("serviceTypeSelect") || {}).value || "Sunday Service";
+  const markedBy = getAdminName() || "Unknown";
   setSync("Saving attendance...");
   const result = await apiPost(
-    { action:"markAttendance", memberId, date:today, serviceType, markedBy:"App User" },
-    () => cache.Attendance.push({ ID:"pending", MemberID:memberId, Date:today, ServiceType:serviceType, MarkedBy:"App User" })
+    { action:"markAttendance", memberId, date:today, serviceType, markedBy },
+    () => cache.Attendance.push({ ID:"pending", MemberID:memberId, Date:today, ServiceType:serviceType, MarkedBy:markedBy })
   );
-  if (!result.offline) { setSync("Attendance saved"); loadAll(); }
+  if (!result.offline) {
+    setSync("Attendance saved");
+    await loadAll();
+    // Find the record we just created so Undo can remove that exact one
+    const justMarked = cache.Attendance.find(a => String(a.MemberID)===String(memberId) && a.Date===today && a.ServiceType===serviceType);
+    if (justMarked) showUndoBar(justMarked.ID, "Attendance", `Marked present for ${serviceType}`);
+  }
   closeDetail();
+}
+
+function showUndoBar(recordId, sheet, message) {
+  const bar = document.createElement("div");
+  bar.style.cssText = "position:fixed;bottom:76px;left:16px;right:16px;background:var(--blue-dark);color:white;border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:70;font-size:13px;";
+  bar.innerHTML = `<span>${message}</span><button style="background:none;border:none;color:#8FC1FF;font-weight:700;font-size:13px;" onclick="undoRecord('${sheet}','${recordId}', this.parentElement)">UNDO</button>`;
+  document.body.appendChild(bar);
+  setTimeout(() => { if (bar.parentElement) bar.remove(); }, 6000);
+}
+async function undoRecord(sheet, id, barEl) {
+  if (barEl) barEl.remove();
+  await deleteRecord(sheet, id);
 }
 
 async function moveRecord(fromSheet, toSheet, id) {
@@ -639,7 +721,7 @@ async function moveRecord(fromSheet, toSheet, id) {
   if (!r) return;
   setSync("Moving record...");
   const data = { FirstName:r.FirstName, Surname:r.Surname, Phone:r.Phone };
-  const result = await apiPost({ action:"move", fromSheet, toSheet, id, data });
+  const result = await apiPost({ action:"move", fromSheet, toSheet, id, data, adminName: getAdminName() });
   if (!result.offline) { setSync("Moved"); loadAll(); }
   else { setSync("Move saved offline — will sync when back online"); }
   closeDetail();
@@ -655,7 +737,7 @@ function confirmDelete(sheet, id, name) {
 async function deleteRecord(sheet, id) {
   setSync("Deleting...");
   const result = await apiPost(
-    { action:"delete", sheet, id },
+    { action:"delete", sheet, id, adminName: getAdminName() },
     () => { cache[sheet] = (cache[sheet]||[]).filter(r => String(r.ID) !== String(id)); renderList(sheet); }
   );
   if (!result.offline) { setSync("Deleted"); loadAll(); }
@@ -665,7 +747,7 @@ async function deleteRecord(sheet, id) {
 
 /* ============ ADD / EDIT FORM ============ */
 const FORM_FIELDS = {
-  Members: ["FirstName","Surname","Phone","Address","Birthdate","Department","JoinDate","Status","Occupation","MaritalStatus","EmergencyContactName","EmergencyContactPhone","EmergencyContactRelationship"],
+  Members: ["FirstName","Surname","Gender","Phone","Address","Birthdate","Department","JoinDate","Status","Occupation","MaritalStatus","EmergencyContactName","EmergencyContactPhone","EmergencyContactRelationship"],
   Visitors: ["FirstName","Surname","Phone","Address","DateVisited","InvitedBy","FollowUpStatus","Notes"],
   Prospects: ["FirstName","Surname","Phone","Location","DateContacted","ContactedBy","InterestStatus","Notes"]
 };
@@ -682,6 +764,13 @@ function openForm(sheet, id) {
   };
   const fieldHTML = (f) => {
     const label = LABELS[f] || f;
+    if (f === "Gender") {
+      const opts = ["", "Male", "Female"];
+      return `<div class="field"><label>${label}</label>
+        <select name="${f}">
+          ${opts.map(o => `<option value="${o}" ${existing[f]===o?"selected":""}>${o||"Select..."}</option>`).join("")}
+        </select></div>`;
+    }
     if (f === "MaritalStatus") {
       const opts = ["", "Single", "Married", "Widowed"];
       return `<div class="field"><label>${label}</label>
@@ -711,7 +800,7 @@ function openForm(sheet, id) {
     let result;
     if (id) {
       result = await apiPost(
-        { action:"update", sheet, id, data },
+        { action:"update", sheet, id, data, adminName: getAdminName() },
         () => { Object.assign(findRecord(sheet, id) || {}, data); renderList(sheet); }
       );
     } else {
@@ -722,7 +811,7 @@ function openForm(sheet, id) {
       }
       const tempId = "pending-" + Date.now();
       result = await apiPost(
-        { action:"add", sheet, data },
+        { action:"add", sheet, data, adminName: getAdminName() },
         () => { cache[sheet].push({ ID: tempId, ...data }); renderList(sheet); }
       );
     }
@@ -808,6 +897,33 @@ function renderServiceAbsentees() {
       </div>
     `).join("")}
   `;
+}
+
+/* ============ PRINT ============ */
+function printScreen(label) {
+  const now = new Date().toLocaleString([], {dateStyle:"medium", timeStyle:"short"});
+  document.getElementById("printSubtitle").textContent = `${label} — printed ${now}`;
+  window.print();
+}
+
+/* ============ AUDIT LOG VIEW ============ */
+async function loadAuditLog() {
+  const container = document.getElementById("auditResults");
+  container.innerHTML = `<div class="empty">Loading...</div>`;
+  try {
+    const res = await apiGet("getAudit", "AuditLog");
+    const rows = res.data || [];
+    if (rows.length === 0) { container.innerHTML = `<div class="empty">No activity logged yet</div>`; return; }
+    container.innerHTML = rows.map(r => {
+      const when = new Date(r.Timestamp).toLocaleString([], {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
+      return `<div style="border-bottom:1px solid var(--border);padding:8px 0;font-size:13px;">
+        <strong>${r.AdminName||"Unknown"}</strong> — ${r.Action} on ${r.Sheet} ${r.Details?`(${r.Details})`:""}
+        <div style="color:var(--muted);font-size:11px;">${when}</div>
+      </div>`;
+    }).join("");
+  } catch (err) {
+    container.innerHTML = `<div class="empty">Couldn't load activity — check your connection</div>`;
+  }
 }
 
 /* ============ CSV EXPORT (BACKUP) ============ */
@@ -919,6 +1035,15 @@ function renderAnalysis() {
   });
   const deptRows = Object.keys(depts).sort((a,b) => depts[b]-depts[a]).map(d => ({ label:d, count:depts[d] }));
   barChart("deptChart", deptRows, "dept");
+
+  // Gender breakdown
+  const genders = {};
+  cache.Members.forEach(m => {
+    const g = m.Gender || "Not specified";
+    genders[g] = (genders[g]||0) + 1;
+  });
+  const genderRows = Object.keys(genders).sort((a,b) => genders[b]-genders[a]).map(g => ({ label:g, count:genders[g] }));
+  barChart("genderChart", genderRows);
 }
 
 /* ============ POPUPS: BIRTHDAYS + ABSENTEE ALERTS ============ */
