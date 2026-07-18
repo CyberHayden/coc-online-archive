@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Church of Christ Online Archive</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
 <meta name="theme-color" content="#1F4E78">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -140,6 +141,7 @@
   .filter-row{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
   .filter-row select{padding:10px 12px; border-radius:10px; border:1px solid var(--border); font-size:14px; background:var(--white);}
   .sync-status{font-size:11px; color:var(--muted); text-align:right; margin-top:-6px; margin-bottom:10px;}
+  .card img{max-height:220px; object-fit:cover;}
 
   .section-title{font-size:14px; font-weight:700; color:var(--blue-dark); margin:20px 0 10px;}
   .chart-card{background:var(--white); border-radius:var(--radius); border:1px solid var(--border); padding:14px; margin-bottom:14px;}
@@ -199,9 +201,49 @@
   .walk-dots span{width:7px;height:7px;border-radius:50%;background:var(--border);}
   .walk-dots span.active{background:var(--red);}
   .walk-actions{display:flex; gap:10px;}
+
+  /* SPLASH SCREEN — shown briefly while the app does its first sync */
+  .splash-screen{
+    position:fixed; inset:0; z-index:200;
+    background:linear-gradient(160deg, var(--blue) 0%, var(--blue-dark) 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transition:opacity 0.4s ease;
+  }
+  .splash-screen.hide{ opacity:0; pointer-events:none; }
+  .splash-logo{
+    width:96px; height:96px; border-radius:20px; background:white; object-fit:contain; padding:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.25);
+    animation:splashPop 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes splashPop{ from{transform:scale(0.6); opacity:0;} to{transform:scale(1); opacity:1;} }
+  .splash-title{color:white; font-weight:700; font-size:16px; margin-top:16px; text-align:center; padding:0 30px;}
+  .splash-spinner{
+    margin-top:22px; width:26px; height:26px; border-radius:50%;
+    border:3px solid rgba(255,255,255,0.25); border-top-color:var(--red);
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{ to{transform:rotate(360deg);} }
+
+  /* On wider screens (desktop/tablet), keep the app at a phone-like column instead of stretching full-bleed —
+     this rule must stay LAST in the stylesheet so it wins over the earlier base rules for these same elements. */
+  @media (min-width: 560px) {
+    body{ max-width:480px; margin:0 auto; box-shadow:0 0 40px rgba(15,30,50,0.14); min-height:100vh; }
+    header.app-header{ max-width:480px; margin:0 auto; }
+    nav.bottom{ left:50%; right:auto; transform:translateX(-50%); width:100%; max-width:480px; }
+    .lock-overlay, .walk-overlay, .name-overlay, .splash-screen{
+      max-width:480px; left:50%; right:auto; transform:translateX(-50%);
+    }
+  }
 </style>
 </head>
 <body>
+
+<!-- SPLASH SCREEN — first thing shown, fades out once the app is ready -->
+<div class="splash-screen" id="splashScreen">
+  <img src="icon-192.png" class="splash-logo" alt="logo" onerror="this.style.display='none'">
+  <div class="splash-title">Church of Christ Online Archive</div>
+  <div class="splash-spinner"></div>
+</div>
 
 <!-- ADMIN LOGIN — only shown when someone taps "Admin"; members never see this -->
 <div class="lock-overlay" id="lockOverlay" style="display:none;">
@@ -402,13 +444,22 @@
 
 <nav class="bottom">
   <button class="active" data-target="members" onclick="showScreen('members')"><div class="dot"></div>Members</button>
-  <button data-target="attendance" onclick="showScreen('attendance')"><div class="dot"></div>Attendance</button>
-  <button data-target="visitors" onclick="showScreen('visitors')"><div class="dot"></div>Visitors</button>
-  <button data-target="prospects" onclick="showScreen('prospects')"><div class="dot"></div>Prospects</button>
   <button data-target="congregations" onclick="showScreen('congregations')"><div class="dot"></div>Nearby</button>
   <button data-target="bulletin" onclick="showScreen('bulletin')"><div class="dot"></div>Bulletin</button>
-  <button data-target="reports" onclick="showScreen('reports')"><div class="dot"></div>Reports</button>
+  <button class="admin-only" onclick="openMoreMenu()"><div class="dot"></div>More</button>
 </nav>
+
+<!-- MORE MENU (admin only) — holds the less-frequently-used tabs so the bar stays uncluttered -->
+<div class="detail-overlay" id="moreOverlay">
+  <div class="sheet">
+    <button class="close-x" onclick="closeMoreMenu()">&times;</button>
+    <h2>More</h2>
+    <button class="btn ghost block" style="margin-top:14px;" onclick="goToFromMore('attendance')">Attendance</button>
+    <button class="btn ghost block" style="margin-top:10px;" onclick="goToFromMore('visitors')">Visitors</button>
+    <button class="btn ghost block" style="margin-top:10px;" onclick="goToFromMore('prospects')">Prospects</button>
+    <button class="btn ghost block" style="margin-top:10px;" onclick="goToFromMore('reports')">Reports &amp; Analysis</button>
+  </div>
+</div>
 
 <script>
 /* ============ CONFIG ============ */
@@ -451,13 +502,14 @@ function applyRoleToUI() {
   const adminOnlyNav = ["attendance","visitors","prospects","reports"];
   document.querySelectorAll("nav.bottom button").forEach(btn => {
     const target = btn.getAttribute("data-target");
-    if (adminOnlyNav.includes(target) && !isAdmin()) {
-      btn.style.display = "none";
+    if (adminOnlyNav.includes(target)) {
+      btn.style.display = isAdmin() ? "" : "none";
     }
   });
   document.querySelectorAll(".admin-only").forEach(el => {
     el.style.display = isAdmin() ? "" : "none";
   });
+  renderList("Members", document.getElementById("memberSearch").value);
 }
 
 function checkLock() {
@@ -639,6 +691,10 @@ async function apiPost(payload, optimisticUpdate) {
 function setSync(msg) { document.getElementById("syncStatus").textContent = msg; }
 
 /* ============ NAVIGATION ============ */
+function openMoreMenu() { document.getElementById("moreOverlay").classList.add("show"); }
+function closeMoreMenu() { document.getElementById("moreOverlay").classList.remove("show"); }
+function goToFromMore(name) { closeMoreMenu(); showScreen(name); }
+
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + name).classList.add("active");
@@ -656,6 +712,17 @@ function showScreen(name) {
   if (name === "bulletin") loadBulletin();
 }
 function showScreenByName(name) { showScreen(name); }
+
+/* ============ SPLASH SCREEN ============ */
+function hideSplash() {
+  const el = document.getElementById("splashScreen");
+  if (el && !el.classList.contains("hide")) {
+    el.classList.add("hide");
+    setTimeout(() => el.remove(), 450);
+  }
+}
+// Safety net: never let a slow/offline first load leave the splash stuck on screen
+setTimeout(hideSplash, 3500);
 
 /* ============ LOAD DATA ============ */
 async function loadAll(manual) {
@@ -681,8 +748,10 @@ async function loadAll(manual) {
     renderList("Prospects");
     renderCongList();
     checkPopups();
+    hideSplash();
   } catch (err) {
     setSync("Offline — showing last saved data");
+    hideSplash();
   }
 }
 
@@ -855,8 +924,8 @@ function renderList(sheet, filterText) {
     <div class="card" onclick='openDetail("${sheet}", ${JSON.stringify(r.ID)})'>
       <div class="name">${fullName(r) || "(no name)"}</div>
       <div class="meta">${r.Phone || ""}${sheet==="Members" && !isAdmin() ? ` · ${r.Address||""}` : ""}</div>
-      ${sheet==="Visitors" ? `<span class="tag">${r.FollowUpStatus||"Not contacted"}</span>` : ""}
-      ${sheet==="Prospects" ? `<span class="tag">${r.InterestStatus||"New"}</span>` : ""}
+      ${sheet==="Visitors" ? `<span class="tag">${r.FollowUpStatus||"Not contacted"}</span> ${r.Gender?`<span class="tag">${r.Gender}</span>`:""}` : ""}
+      ${sheet==="Prospects" ? `<span class="tag">${r.InterestStatus||"New"}</span> ${r.Gender?`<span class="tag">${r.Gender}</span>`:""}` : ""}
       ${sheet==="Members" && isAdmin() ? `<span class="tag">${r.Department||"No department"}</span>` : ""}
       ${sheet==="Members" && !isAdmin() && r.Gender ? `<span class="tag">${r.Gender}</span>` : ""}
     </div>
@@ -1005,8 +1074,8 @@ async function deleteRecord(sheet, id) {
 /* ============ ADD / EDIT FORM ============ */
 const FORM_FIELDS = {
   Members: ["FirstName","Surname","Gender","Phone","Address","Birthdate","Department","JoinDate","Status","Occupation","MaritalStatus","EmergencyContactName","EmergencyContactPhone","EmergencyContactRelationship"],
-  Visitors: ["FirstName","Surname","Phone","Address","DateVisited","InvitedBy","FollowUpStatus","Notes"],
-  Prospects: ["FirstName","Surname","Phone","Location","DateContacted","ContactedBy","InterestStatus","Notes"]
+  Visitors: ["FirstName","Surname","Gender","Phone","Address","DateVisited","InvitedBy","FollowUpStatus","Notes"],
+  Prospects: ["FirstName","Surname","Gender","Phone","Location","DateContacted","ContactedBy","InterestStatus","Notes"]
 };
 
 function openForm(sheet, id) {
@@ -1326,7 +1395,23 @@ function closePopup(){ document.getElementById("popupOverlay").classList.remove(
 
 /* ============ INIT ============ */
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("service-worker.js").catch(()=>{});
+  navigator.serviceWorker.register("service-worker.js").then((reg) => {
+    reg.update(); // force an eager check instead of waiting on the browser's own timing
+    reg.addEventListener("updatefound", () => {
+      const newWorker = reg.installing;
+      if (!newWorker) return;
+      newWorker.addEventListener("statechange", () => {
+        if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+          // A new version just took over — reload once so the update actually shows up,
+          // instead of silently sitting there until the app is closed and reopened.
+          if (!sessionStorage.getItem("coc_reloaded_for_update")) {
+            sessionStorage.setItem("coc_reloaded_for_update", "yes");
+            window.location.reload();
+          }
+        }
+      });
+    });
+  }).catch(()=>{});
 }
 loadAll();
 updateQueueBadge();
