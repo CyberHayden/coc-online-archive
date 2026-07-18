@@ -23,42 +23,55 @@
     --radius:14px;
   }
   *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
   body{
     margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
     background:var(--bg); color:var(--text); padding-bottom:76px;
+    -webkit-tap-highlight-color:transparent;
   }
   header.app-header{
     background:var(--blue); color:var(--white); padding:18px 16px 16px;
     display:flex; align-items:center; gap:10px;
     position:sticky; top:0; z-index:10;
+    box-shadow:0 2px 10px rgba(15,30,50,0.18);
   }
+  .role-pill{
+    margin-left:auto; background:rgba(255,255,255,0.16); color:var(--white);
+    font-size:11px; font-weight:700; padding:6px 12px; border-radius:20px; cursor:pointer;
+    white-space:nowrap; transition:background 0.15s ease;
+  }
+  .role-pill:active{background:rgba(255,255,255,0.3);}
   header.app-header img{width:36px;height:36px;border-radius:8px;background:var(--white);object-fit:cover;}
   header.app-header .title{font-size:16px; font-weight:700; line-height:1.2;}
   header.app-header .sub{font-size:11px; opacity:0.85;}
   main{padding:14px;}
-  .screen{display:none;}
+  .screen{display:none; animation:fadeIn 0.2s ease;}
   .screen.active{display:block;}
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
 
   .searchbar{
     display:flex; gap:8px; margin-bottom:12px;
   }
   .searchbar input{
     flex:1; padding:12px 14px; border-radius:12px; border:1px solid var(--border);
-    font-size:15px; background:var(--white);
+    font-size:15px; background:var(--white); transition:border-color 0.15s ease, box-shadow 0.15s ease;
   }
+  .searchbar input:focus{ outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(31,78,120,0.12); }
   .btn{
     border:none; border-radius:12px; padding:12px 16px; font-size:15px; font-weight:600;
-    cursor:pointer; color:var(--white); background:var(--blue);
+    cursor:pointer; color:var(--white); background:var(--blue); transition:transform 0.08s ease, opacity 0.15s ease;
   }
   .btn.red{background:var(--red);}
   .btn.ghost{background:var(--white); color:var(--blue); border:1px solid var(--blue);}
   .btn.block{width:100%;}
-  .btn:active{opacity:0.85;}
+  .btn:active{opacity:0.85; transform:scale(0.97);}
 
   .card{
     background:var(--white); border-radius:var(--radius); padding:14px; margin-bottom:10px;
     border:1px solid var(--border); cursor:pointer;
+    box-shadow:0 1px 3px rgba(15,30,50,0.05); transition:box-shadow 0.15s ease, transform 0.08s ease;
   }
+  .card:active{ transform:scale(0.99); box-shadow:0 1px 2px rgba(15,30,50,0.04); }
   .card .name{font-weight:700; font-size:16px;}
   .card .meta{font-size:13px; color:var(--muted); margin-top:2px;}
   .card .tag{
@@ -75,12 +88,18 @@
   .sheet{
     background:var(--white); width:100%; max-width:520px; border-radius:20px 20px 0 0;
     padding:20px; max-height:88vh; overflow-y:auto;
+    animation:slideUp 0.22s cubic-bezier(0.16,1,0.3,1);
   }
+  @keyframes slideUp{ from{transform:translateY(24px); opacity:0.6;} to{transform:translateY(0); opacity:1;} }
   .sheet h2{margin:0 0 4px; font-size:19px; color:var(--blue-dark);}
   .sheet .field{margin-bottom:10px;}
   .sheet label{font-size:12px; color:var(--muted); display:block; margin-bottom:4px; font-weight:600;}
   .sheet input, .sheet select, .sheet textarea{
     width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--border); font-size:15px;
+    transition:border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .sheet input:focus, .sheet select:focus, .sheet textarea:focus{
+    outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(31,78,120,0.12);
   }
   .row-actions{display:flex; gap:10px; margin-top:16px;}
   .close-x{position:absolute; top:14px; right:16px; background:none; border:none; font-size:22px; color:var(--muted); cursor:pointer;}
@@ -89,10 +108,11 @@
   nav.bottom{
     position:fixed; bottom:0; left:0; right:0; background:var(--white);
     border-top:1px solid var(--border); display:flex; z-index:20;
+    box-shadow:0 -2px 10px rgba(15,30,50,0.06);
   }
   nav.bottom button{
-    flex:1; border:none; background:none; padding:10px 4px 12px; font-size:11px; font-weight:600;
-    color:var(--muted); cursor:pointer;
+    flex:1; border:none; background:none; padding:10px 2px 12px; font-size:10.5px; font-weight:600;
+    color:var(--muted); cursor:pointer; transition:color 0.15s ease;
   }
   nav.bottom button.active{color:var(--red);}
   nav.bottom button .dot{
@@ -183,15 +203,16 @@
 </head>
 <body>
 
-<!-- PASSCODE LOCK — covers the whole screen until the correct shared passcode is entered -->
-<div class="lock-overlay" id="lockOverlay">
+<!-- ADMIN LOGIN — only shown when someone taps "Admin"; members never see this -->
+<div class="lock-overlay" id="lockOverlay" style="display:none;">
   <div class="lock-box">
     <img src="icon-192.png" alt="logo" onerror="this.style.display='none'">
-    <h2>Church of Christ Online Archive</h2>
-    <p>Enter the team passcode to continue</p>
-    <input type="password" id="lockInput" inputmode="numeric" placeholder="••••" maxlength="12" autofocus>
+    <h2>Admin Login</h2>
+    <p>Enter the admin passcode to unlock full access</p>
+    <input type="password" id="lockInput" inputmode="numeric" placeholder="••••" maxlength="12">
     <div class="lock-error" id="lockError"></div>
     <button class="btn block" onclick="tryUnlock()">Unlock</button>
+    <button class="btn ghost block" style="margin-top:8px;" onclick="closeAdminLogin()">Cancel</button>
   </div>
 </div>
 
@@ -216,6 +237,7 @@
     <div class="title">Church of Christ Online Archive</div>
     <div class="sub" id="screenLabel">Members</div>
   </div>
+  <div class="role-pill" id="rolePill" onclick="openAdminLogin()">Admin</div>
 </header>
 
 <main>
@@ -230,10 +252,10 @@
     <div class="searchbar">
       <input type="text" id="memberSearch" placeholder="Search a member's full name...">
       <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
-      <button class="btn ghost" onclick="printScreen('Members')" title="Print">🖶</button>
-      <button class="btn" onclick="openForm('Members', null)">+ Add</button>
+      <button class="btn ghost admin-only" onclick="printScreen('Members')" title="Print">🖶</button>
+      <button class="btn admin-only" onclick="openForm('Members', null)">+ Add</button>
     </div>
-    <div class="filter-row">
+    <div class="filter-row admin-only">
       <select id="deptFilter" onchange="renderList('Members', document.getElementById('memberSearch').value)">
         <option value="">All departments</option>
       </select>
@@ -308,6 +330,26 @@
     <div id="prospectResults"></div>
   </section>
 
+  <!-- CONGREGATIONS SCREEN -->
+  <section class="screen" id="screen-congregations">
+    <div class="searchbar">
+      <input type="text" id="congSearch" placeholder="Search a congregation...">
+      <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
+      <button class="btn admin-only" onclick="openCongForm(null)">+ Add</button>
+    </div>
+    <div id="congResults"></div>
+  </section>
+
+  <!-- BULLETIN SCREEN -->
+  <section class="screen" id="screen-bulletin">
+    <div class="searchbar">
+      <div style="flex:1;font-size:13px;color:var(--muted);align-self:center;">Latest from the church website</div>
+      <button class="btn ghost" onclick="loadBulletin()" title="Refresh">⟳</button>
+    </div>
+    <div id="bulletinResults"></div>
+    <a class="btn ghost block" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box;margin-top:10px;" href="https://cocigbogbo.blogspot.com/" target="_blank" rel="noopener">Visit the full website</a>
+  </section>
+
   <!-- REPORTS SCREEN -->
   <section class="screen" id="screen-reports">
     <div class="snapshot-grid">
@@ -359,11 +401,13 @@
 </div>
 
 <nav class="bottom">
-  <button class="active" onclick="showScreen('members')"><div class="dot"></div>Members</button>
-  <button onclick="showScreen('attendance')"><div class="dot"></div>Attendance</button>
-  <button onclick="showScreen('visitors')"><div class="dot"></div>Visitors</button>
-  <button onclick="showScreen('prospects')"><div class="dot"></div>Prospects</button>
-  <button onclick="showScreen('reports')"><div class="dot"></div>Reports</button>
+  <button class="active" data-target="members" onclick="showScreen('members')"><div class="dot"></div>Members</button>
+  <button data-target="attendance" onclick="showScreen('attendance')"><div class="dot"></div>Attendance</button>
+  <button data-target="visitors" onclick="showScreen('visitors')"><div class="dot"></div>Visitors</button>
+  <button data-target="prospects" onclick="showScreen('prospects')"><div class="dot"></div>Prospects</button>
+  <button data-target="congregations" onclick="showScreen('congregations')"><div class="dot"></div>Nearby</button>
+  <button data-target="bulletin" onclick="showScreen('bulletin')"><div class="dot"></div>Bulletin</button>
+  <button data-target="reports" onclick="showScreen('reports')"><div class="dot"></div>Reports</button>
 </nav>
 
 <script>
@@ -372,8 +416,19 @@ const API_URL = "https://script.google.com/macros/s/AKfycbz4gBgh_qKofWUqIH-EPUoO
 
 // Shared passcode the admin team uses to open the app on their phones.
 // Change this before publishing, and share it only with your admin/usher team.
+// Only admins need a passcode. Members open the app directly with no login at all.
+// Change this before publishing, and share it only with your admin/usher team.
 const APP_PASSCODE = "2510";
-const LOCK_KEY = "coc_unlocked";
+const ADMIN_AUTH_KEY = "coc_admin_authenticated"; // this device has successfully entered the admin passcode at least once
+const ACTIVE_ROLE_KEY = "coc_active_role";        // "admin" or "member" — which view is currently showing
+
+function isAdminAuthenticated() { return localStorage.getItem(ADMIN_AUTH_KEY) === "yes"; }
+function getActiveRole() {
+  if (!isAdminAuthenticated()) return "member";
+  return localStorage.getItem(ACTIVE_ROLE_KEY) || "admin";
+}
+function isAdmin() { return getActiveRole() === "admin"; }
+function getRole() { return getActiveRole(); }
 
 const ADMIN_NAME_KEY = "coc_admin_name";
 function getAdminName() { return localStorage.getItem(ADMIN_NAME_KEY) || ""; }
@@ -386,30 +441,76 @@ function saveAdminName() {
 }
 function checkAdminName() {
   if (getAdminName()) {
+    apiPost({ action:"login", name:getAdminName(), role:getRole() }).catch(()=>{});
     maybeShowWalkthrough();
   } else {
     document.getElementById("nameOverlay").classList.add("show");
   }
 }
+function applyRoleToUI() {
+  const adminOnlyNav = ["attendance","visitors","prospects","reports"];
+  document.querySelectorAll("nav.bottom button").forEach(btn => {
+    const target = btn.getAttribute("data-target");
+    if (adminOnlyNav.includes(target) && !isAdmin()) {
+      btn.style.display = "none";
+    }
+  });
+  document.querySelectorAll(".admin-only").forEach(el => {
+    el.style.display = isAdmin() ? "" : "none";
+  });
+}
 
 function checkLock() {
-  if (localStorage.getItem(LOCK_KEY) === "yes") {
-    document.getElementById("lockOverlay").style.display = "none";
-    checkAdminName();
-  } else {
-    document.getElementById("lockInput").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") tryUnlock();
-    });
-  }
+  // Members: no gate at all — go straight into the app.
+  // Admins who already authenticated on this device: also go straight in, in whichever
+  // view (admin/member) they were last in.
+  document.getElementById("lockOverlay").style.display = "none";
+  applyRoleToUI();
+  updateRolePill();
+  if (isAdmin()) checkAdminName();
+  else maybeShowWalkthrough();
+}
+function openAdminLogin() {
+  document.getElementById("lockOverlay").style.display = "flex";
+  document.getElementById("lockInput").value = "";
+  document.getElementById("lockError").textContent = "";
+  document.getElementById("lockInput").focus();
+}
+function closeAdminLogin() {
+  document.getElementById("lockOverlay").style.display = "none";
 }
 function tryUnlock() {
   const val = document.getElementById("lockInput").value;
   if (val === APP_PASSCODE) {
-    localStorage.setItem(LOCK_KEY, "yes");
+    localStorage.setItem(ADMIN_AUTH_KEY, "yes");
+    localStorage.setItem(ACTIVE_ROLE_KEY, "admin");
+    localStorage.removeItem(WALK_KEY); // give admins the full tour the first time they see admin mode
     document.getElementById("lockOverlay").style.display = "none";
+    applyRoleToUI();
+    updateRolePill();
     checkAdminName();
   } else {
     document.getElementById("lockError").textContent = "Incorrect passcode — try again";
+  }
+}
+function toggleAdminMemberView() {
+  const next = isAdmin() ? "member" : "admin";
+  localStorage.setItem(ACTIVE_ROLE_KEY, next);
+  applyRoleToUI();
+  updateRolePill();
+  showScreenByName("members");
+}
+function updateRolePill() {
+  const pill = document.getElementById("rolePill");
+  if (!isAdminAuthenticated()) {
+    pill.textContent = "Admin";
+    pill.onclick = openAdminLogin;
+  } else if (isAdmin()) {
+    pill.textContent = "Admin view";
+    pill.onclick = toggleAdminMemberView;
+  } else {
+    pill.textContent = "Member view";
+    pill.onclick = toggleAdminMemberView;
   }
 }
 checkLock();
@@ -455,7 +556,7 @@ function maybeShowWalkthrough() {
 
 
 /* ============ STATE ============ */
-let cache = { Members: [], Attendance: [], Visitors: [], Prospects: [] };
+let cache = { Members: [], Attendance: [], Visitors: [], Prospects: [], Congregations: [] };
 
 /* ============ OFFLINE QUEUE ============ */
 // Anything added/edited while offline gets stored here and replayed
@@ -542,7 +643,8 @@ function showScreen(name) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById("screen-" + name).classList.add("active");
   document.querySelectorAll("nav.bottom button").forEach(b => b.classList.remove("active"));
-  event.currentTarget.classList.add("active");
+  const navBtn = document.querySelector(`nav.bottom button[data-target="${name}"]`);
+  if (navBtn) navBtn.classList.add("active");
   document.getElementById("screenLabel").textContent = name.charAt(0).toUpperCase() + name.slice(1);
   if (name === "attendance") {
     const dateInput = document.getElementById("serviceReportDate");
@@ -550,32 +652,170 @@ function showScreen(name) {
     renderAbsentees();
   }
   if (name === "reports") renderSnapshot();
+  if (name === "congregations") renderCongList();
+  if (name === "bulletin") loadBulletin();
 }
+function showScreenByName(name) { showScreen(name); }
 
 /* ============ LOAD DATA ============ */
 async function loadAll(manual) {
   setSync("Syncing...");
   try {
-    const [m, a, v, p] = await Promise.all([
+    const [m, a, v, p, c] = await Promise.all([
       apiGet("getAll", "Members"),
       apiGet("getAll", "Attendance"),
       apiGet("getAll", "Visitors"),
-      apiGet("getAll", "Prospects")
+      apiGet("getAll", "Prospects"),
+      apiGet("getAll", "Congregations")
     ]);
     cache.Members = m.data || [];
     cache.Attendance = a.data || [];
     cache.Visitors = v.data || [];
     cache.Prospects = p.data || [];
+    cache.Congregations = c.data || [];
     const now = new Date();
     setSync("Last synced " + now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
     refreshDeptFilterOptions();
     renderList("Members");
     renderList("Visitors");
     renderList("Prospects");
+    renderCongList();
     checkPopups();
   } catch (err) {
     setSync("Offline — showing last saved data");
   }
+}
+
+/* ============ BULLETIN (LATEST FROM THE CHURCH WEBSITE) ============ */
+function loadBulletin() {
+  const container = document.getElementById("bulletinResults");
+  container.innerHTML = `<div class="empty">Loading latest posts...</div>`;
+  window.__handleBulletinFeed = renderBulletin;
+  const existing = document.getElementById("bulletinScript");
+  if (existing) existing.remove();
+  const script = document.createElement("script");
+  script.id = "bulletinScript";
+  script.src = "https://cocigbogbo.blogspot.com/feeds/posts/default?alt=json-in-script&callback=__handleBulletinFeed&max-results=8";
+  script.onerror = () => { container.innerHTML = `<div class="empty">Couldn't load posts — check your connection</div>`; };
+  document.body.appendChild(script);
+  setTimeout(() => {
+    if (container.innerHTML.includes("Loading latest posts")) {
+      container.innerHTML = `<div class="empty">Couldn't load posts — check your connection</div>`;
+    }
+  }, 6000);
+}
+
+function renderBulletin(json) {
+  const container = document.getElementById("bulletinResults");
+  const entries = (json && json.feed && json.feed.entry) || [];
+  if (entries.length === 0) { container.innerHTML = `<div class="empty">No posts found yet</div>`; return; }
+  container.innerHTML = entries.map(entry => {
+    const title = (entry.title && entry.title.$t) || "(untitled post)";
+    const published = entry.published ? new Date(entry.published.$t).toLocaleDateString([], {month:"short", day:"numeric", year:"numeric"}) : "";
+    const raw = (entry.summary && entry.summary.$t) || (entry.content && entry.content.$t) || "";
+    const snippet = raw.replace(/<[^>]+>/g, "").trim().slice(0, 140);
+    const linkObj = (entry.link || []).find(l => l.rel === "alternate");
+    const link = linkObj ? linkObj.href : "https://cocigbogbo.blogspot.com/";
+    let thumb = "";
+    if (entry.media$thumbnail && entry.media$thumbnail.url) {
+      thumb = entry.media$thumbnail.url.replace(/\/s\d+(-c)?\//, "/s400/");
+    }
+    return `
+      <div class="card" onclick="window.open('${link.replace(/'/g,"\\'")}', '_blank')">
+        ${thumb ? `<img src="${thumb}" style="width:100%;border-radius:10px;margin-bottom:8px;display:block;" alt="">` : ""}
+        <div class="name">${title}</div>
+        <div class="meta">${published}</div>
+        ${snippet ? `<p style="font-size:13px;color:var(--text);margin:6px 0 0;">${snippet}${raw.length>140?"...":""}</p>` : ""}
+        <div style="color:var(--blue);font-weight:700;font-size:12px;margin-top:8px;">Read full article →</div>
+      </div>
+    `;
+  }).join("");
+}
+
+/* ============ CONGREGATIONS (NEARBY CHURCHES) ============ */
+function mapsLink(address) {
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address || "");
+}
+
+function renderCongList(filterText) {
+  const container = document.getElementById("congResults");
+  let rows = cache.Congregations || [];
+  if (filterText) {
+    const q = filterText.toLowerCase();
+    rows = rows.filter(r => (r.Name||"").toLowerCase().includes(q));
+  }
+  if (rows.length === 0) {
+    container.innerHTML = `<div class="empty">${filterText ? "No match found" : (isAdmin() ? "No congregations yet — tap + Add to create one" : "No congregations listed yet")}</div>`;
+    return;
+  }
+  container.innerHTML = rows.map(r => `
+    <div class="card" onclick='openCongDetail(${JSON.stringify(r.ID)})'>
+      <div class="name">${r.Name || "(no name)"}</div>
+      <div class="meta">${r.Address || ""}</div>
+    </div>
+  `).join("");
+}
+
+function openCongDetail(id) {
+  const r = (cache.Congregations||[]).find(c => String(c.ID) === String(id));
+  if (!r) return;
+  document.getElementById("detailSheet").innerHTML = `
+    <button class="close-x" onclick="closeDetail()">&times;</button>
+    <h2>${r.Name}</h2>
+    <p style="color:var(--muted);font-size:13px;margin-top:0;">${r.Address||""}</p>
+    <div style="font-size:13px;color:var(--text);background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+      ${r.ContactPerson ? `<div><strong>Contact:</strong> ${r.ContactPerson}</div>` : ""}
+      ${r.ContactPhone ? `<div><strong>Phone:</strong> ${r.ContactPhone}</div>` : ""}
+      ${r.Notes ? `<div style="margin-top:6px;">${r.Notes}</div>` : ""}
+    </div>
+    <a class="btn block" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box;" href="${mapsLink(r.Address)}" target="_blank" rel="noopener">Open in Google Maps</a>
+    ${isAdmin() ? `
+      <button class="btn ghost block" style="margin-top:10px;" onclick='openCongForm("${r.ID}")'>Edit details</button>
+      <button class="btn red block" style="margin-top:10px;" onclick='confirmDelete("Congregations", "${r.ID}", ${JSON.stringify(r.Name)})'>Delete record</button>
+    ` : ""}
+  `;
+  document.getElementById("detailOverlay").classList.add("show");
+}
+
+function openCongForm(id) {
+  const existing = id ? (cache.Congregations||[]).find(c => String(c.ID)===String(id)) : {};
+  const fields = ["Name","Address","ContactPerson","ContactPhone","Notes"];
+  document.getElementById("detailSheet").innerHTML = `
+    <button class="close-x" onclick="closeDetail()">&times;</button>
+    <h2>${id ? "Edit" : "Add"} congregation</h2>
+    <form id="congForm">
+      ${fields.map(f => `
+        <div class="field"><label>${f}</label><input type="text" name="${f}" value="${existing[f]||""}"></div>
+      `).join("")}
+      <div class="row-actions">
+        <button type="button" class="btn ghost block" onclick="closeDetail()">Cancel</button>
+        <button type="submit" class="btn block">Save</button>
+      </div>
+    </form>
+  `;
+  document.getElementById("congForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = {};
+    fields.forEach(f => data[f] = e.target[f].value);
+    setSync("Saving...");
+    let result;
+    if (id) {
+      result = await apiPost(
+        { action:"update", sheet:"Congregations", id, data, adminName:getAdminName() },
+        () => { Object.assign((cache.Congregations||[]).find(c=>String(c.ID)===String(id))||{}, data); renderCongList(); }
+      );
+    } else {
+      const tempId = "pending-" + Date.now();
+      result = await apiPost(
+        { action:"add", sheet:"Congregations", data, adminName:getAdminName() },
+        () => { cache.Congregations.push({ ID: tempId, ...data }); renderCongList(); }
+      );
+    }
+    if (!result.offline) { setSync("Saved"); loadAll(); }
+    else { setSync("Saved offline — will sync when back online"); }
+    closeDetail();
+  });
+  document.getElementById("detailOverlay").classList.add("show");
 }
 
 /* ============ SEARCH + LIST RENDER ============ */
@@ -614,10 +854,11 @@ function renderList(sheet, filterText) {
   container.innerHTML = rows.map(r => `
     <div class="card" onclick='openDetail("${sheet}", ${JSON.stringify(r.ID)})'>
       <div class="name">${fullName(r) || "(no name)"}</div>
-      <div class="meta">${r.Phone || ""}</div>
+      <div class="meta">${r.Phone || ""}${sheet==="Members" && !isAdmin() ? ` · ${r.Address||""}` : ""}</div>
       ${sheet==="Visitors" ? `<span class="tag">${r.FollowUpStatus||"Not contacted"}</span>` : ""}
       ${sheet==="Prospects" ? `<span class="tag">${r.InterestStatus||"New"}</span>` : ""}
-      ${sheet==="Members" ? `<span class="tag">${r.Department||"No department"}</span>` : ""}
+      ${sheet==="Members" && isAdmin() ? `<span class="tag">${r.Department||"No department"}</span>` : ""}
+      ${sheet==="Members" && !isAdmin() && r.Gender ? `<span class="tag">${r.Gender}</span>` : ""}
     </div>
   `).join("");
 }
@@ -637,6 +878,7 @@ function refreshDeptFilterOptions() {
     renderList(sheet, e.target.value);
   });
 });
+document.getElementById("congSearch").addEventListener("input", (e) => renderCongList(e.target.value));
 
 /* ============ DETAIL / MARK / EDIT ============ */
 function findRecord(sheet, id) {
@@ -647,6 +889,21 @@ function openDetail(sheet, id) {
   const r = findRecord(sheet, id);
   if (!r) return;
   const today = new Date().toISOString().slice(0,10);
+
+  // Members viewed by a non-admin see only the public-directory fields, no edit/delete/attendance controls
+  if (sheet === "Members" && !isAdmin()) {
+    document.getElementById("detailSheet").innerHTML = `
+      <button class="close-x" onclick="closeDetail()">&times;</button>
+      <h2>${fullName(r)}</h2>
+      <div style="font-size:14px;color:var(--text);background:var(--bg);border-radius:10px;padding:12px;">
+        <div><strong>Phone:</strong> ${r.Phone||"—"}</div>
+        <div><strong>Address:</strong> ${r.Address||"—"}</div>
+        <div><strong>Gender:</strong> ${r.Gender||"—"}</div>
+      </div>
+    `;
+    document.getElementById("detailOverlay").classList.add("show");
+    return;
+  }
 
   let extraAction = "";
   if (sheet === "Members") {
