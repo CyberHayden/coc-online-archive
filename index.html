@@ -536,8 +536,6 @@ function updateRolePill() {
     pill.onclick = toggleAdminMemberView;
   }
 }
-checkLock();
-
 /* ============ FIRST-OPEN WALKTHROUGH ============ */
 const WALK_KEY = "coc_walkthrough_seen";
 const WALK_STEPS = [
@@ -577,6 +575,7 @@ function maybeShowWalkthrough() {
   }
 }
 
+checkLock();
 
 /* ============ STATE ============ */
 let cache = { Members: [], Attendance: [], Visitors: [], Prospects: [], Congregations: [] };
