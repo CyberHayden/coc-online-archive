@@ -494,14 +494,10 @@ const API_URL = "https://script.google.com/macros/s/AKfycbz4gBgh_qKofWUqIH-EPUoO
 // Only admins need a passcode. Members open the app directly with no login at all.
 // Change this before publishing, and share it only with your admin/usher team.
 const APP_PASSCODE = "2510";
-const ADMIN_AUTH_KEY = "coc_admin_authenticated"; // this device has successfully entered the admin passcode at least once
-const ACTIVE_ROLE_KEY = "coc_active_role";        // "admin" or "member" — which view is currently showing
-
-function isAdminAuthenticated() { return localStorage.getItem(ADMIN_AUTH_KEY) === "yes"; }
-function getActiveRole() {
-  if (!isAdminAuthenticated()) return "member";
-  return localStorage.getItem(ACTIVE_ROLE_KEY) || "admin";
-}
+// Role is intentionally kept in memory only (not localStorage/sessionStorage) — so every
+// app open, refresh, or attempt to switch into Admin always requires the passcode again.
+let currentRole = "member";
+function getActiveRole() { return currentRole; }
 function isAdmin() { return getActiveRole() === "admin"; }
 function getRole() { return getActiveRole(); }
 
@@ -513,14 +509,6 @@ function saveAdminName() {
   localStorage.setItem(ADMIN_NAME_KEY, val);
   document.getElementById("nameOverlay").classList.remove("show");
   maybeShowWalkthrough();
-}
-function checkAdminName() {
-  if (getAdminName()) {
-    apiPost({ action:"login", name:getAdminName(), role:getRole() }).catch(()=>{});
-    maybeShowWalkthrough();
-  } else {
-    document.getElementById("nameOverlay").classList.add("show");
-  }
 }
 function applyRoleToUI() {
   const adminOnlyNav = ["attendance","visitors","prospects","reports"];
@@ -537,14 +525,12 @@ function applyRoleToUI() {
 }
 
 function checkLock() {
-  // Members: no gate at all — go straight into the app.
-  // Admins who already authenticated on this device: also go straight in, in whichever
-  // view (admin/member) they were last in.
+  // Everyone starts as a Member on every open — Admin is never remembered across
+  // reloads, so entering Admin always requires the passcode (see handleSegTap/tryUnlock).
   document.getElementById("lockOverlay").style.display = "none";
   applyRoleToUI();
   updateRolePill();
-  if (isAdmin()) checkAdminName();
-  else maybeShowWalkthrough();
+  maybeShowWalkthrough();
 }
 function openAdminLogin() {
   document.getElementById("lockOverlay").style.display = "flex";
@@ -558,8 +544,7 @@ function closeAdminLogin() {
 function tryUnlock() {
   const val = document.getElementById("lockInput").value;
   if (val === APP_PASSCODE) {
-    localStorage.setItem(ADMIN_AUTH_KEY, "yes");
-    localStorage.setItem(ACTIVE_ROLE_KEY, "admin");
+    currentRole = "admin";
     document.getElementById("lockOverlay").style.display = "none";
     applyRoleToUI();
     updateRolePill();
@@ -571,19 +556,14 @@ function tryUnlock() {
   }
 }
 function toggleAdminMemberView() {
-  const next = isAdmin() ? "member" : "admin";
-  localStorage.setItem(ACTIVE_ROLE_KEY, next);
+  currentRole = isAdmin() ? "member" : "admin";
   applyRoleToUI();
   updateRolePill();
   showScreenByName("members");
 }
 function handleSegTap(target) {
   if (target === "admin") {
-    if (isAdminAuthenticated()) {
-      if (!isAdmin()) toggleAdminMemberView();
-    } else {
-      openAdminLogin();
-    }
+    openAdminLogin(); // passcode required every time — no remembered/trusted device bypass
   } else {
     if (isAdmin()) toggleAdminMemberView();
   }
@@ -622,11 +602,12 @@ function nextWalkStep() {
   renderWalkStep();
 }
 function skipWalkthrough() {
+  localStorage.setItem(WALKTHROUGH_SEEN_KEY, "yes");
   document.getElementById("walkOverlay").classList.remove("show");
 }
+const WALKTHROUGH_SEEN_KEY = "coc_walkthrough_seen";
 function maybeShowWalkthrough() {
-  // Shows every time the app opens, per your request — if this ever feels repetitive
-  // for regular members, just ask and I'll switch it back to "once per device."
+  if (localStorage.getItem(WALKTHROUGH_SEEN_KEY) === "yes") return; // switched to "once per device", per your request
   walkIndex = 0;
   renderWalkStep();
   document.getElementById("walkOverlay").classList.add("show");
@@ -893,6 +874,7 @@ function openCongForm(id) {
     const data = {};
     fields.forEach(f => data[f] = e.target[f].value);
     setSync("Saving...");
+    const displayName = data.Name || "congregation";
     let result;
     if (id) {
       result = await apiPost(
@@ -906,8 +888,18 @@ function openCongForm(id) {
         () => { cache.Congregations.push({ ID: tempId, ...data }); renderCongList(); }
       );
     }
-    if (!result.offline) { setSync("Saved"); loadAll(); }
-    else { setSync("Saved offline — will sync when back online"); }
+    if (result.offline) {
+      setSync("Saved offline — will sync when back online");
+      showToast(`Saved offline — ${displayName} will sync when back online`);
+    } else if (result && result.success === false) {
+      setSync("Save failed");
+      showToast(`Couldn't save ${displayName} — please try again`, { error:true });
+      await loadAll();
+    } else {
+      setSync("Saved");
+      showToast(`${id ? "Updated" : "Added"} ${displayName} ✅`);
+      loadAll();
+    }
     closeDetail();
   });
   document.getElementById("detailOverlay").classList.add("show");
@@ -915,6 +907,13 @@ function openCongForm(id) {
 
 /* ============ SEARCH + LIST RENDER ============ */
 function fullName(r){ return ((r.FirstName||"") + " " + (r.Surname||"")).trim(); }
+function memberDisplayName(r) {
+  const name = fullName(r);
+  if (!name) return "(no name)";
+  if (r.Gender === "Male") return "Bro. " + name;
+  if (r.Gender === "Female") return "Sis. " + name;
+  return name;
+}
 
 function renderList(sheet, filterText) {
   const containerId = { Members:"memberResults", Visitors:"visitorResults", Prospects:"prospectResults" }[sheet];
@@ -940,7 +939,12 @@ function renderList(sheet, filterText) {
       if (attFilter.value === "attended") rows = rows.filter(r => attendedThisMonthIds.has(String(r.ID)));
       if (attFilter.value === "notattended") rows = rows.filter(r => !attendedThisMonthIds.has(String(r.ID)));
     }
-    rows = rows.slice().sort((a,b) => fullName(a).localeCompare(fullName(b)));
+    rows = rows.slice().sort((a,b) => {
+      const genderRank = (g) => g === "Male" ? 0 : g === "Female" ? 1 : 2;
+      const rankDiff = genderRank(a.Gender) - genderRank(b.Gender);
+      if (rankDiff !== 0) return rankDiff;
+      return fullName(a).localeCompare(fullName(b));
+    });
   }
   if (rows.length === 0) {
     container.innerHTML = `<div class="empty">${filterText ? "No match found" : "No records yet — tap + Add to create one"}</div>`;
@@ -948,7 +952,7 @@ function renderList(sheet, filterText) {
   }
   container.innerHTML = rows.map(r => `
     <div class="card" onclick='openDetail("${sheet}", ${JSON.stringify(r.ID)})'>
-      <div class="name">${fullName(r) || "(no name)"}</div>
+      <div class="name">${sheet==="Members" ? memberDisplayName(r) : (fullName(r) || "(no name)")}</div>
       <div class="meta">${r.Phone || ""}${sheet==="Members" && !isAdmin() ? ` · ${r.Address||""}` : ""}</div>
       ${sheet==="Visitors" ? `<span class="tag">${r.FollowUpStatus||"Not contacted"}</span> ${r.Gender?`<span class="tag">${r.Gender}</span>`:""}` : ""}
       ${sheet==="Prospects" ? `<span class="tag">${r.InterestStatus||"New"}</span> ${r.Gender?`<span class="tag">${r.Gender}</span>`:""}` : ""}
@@ -1038,6 +1042,7 @@ function openDetail(sheet, id) {
 function closeDetail(){ document.getElementById("detailOverlay").classList.remove("show"); }
 
 async function markAttendance(memberId) {
+  const member = findRecord("Members", memberId);
   const today = new Date().toISOString().slice(0,10);
   const serviceType = (document.getElementById("serviceTypeSelect") || {}).value || "Sunday Service";
   const markedBy = getAdminName() || "Unknown";
@@ -1051,17 +1056,28 @@ async function markAttendance(memberId) {
     await loadAll();
     // Find the record we just created so Undo can remove that exact one
     const justMarked = cache.Attendance.find(a => String(a.MemberID)===String(memberId) && a.Date===today && a.ServiceType===serviceType);
-    if (justMarked) showUndoBar(justMarked.ID, "Attendance", `Marked present for ${serviceType}`);
+    if (justMarked) showUndoBar(justMarked.ID, "Attendance", `✅ Marked ${member ? fullName(member) : "member"} present — ${serviceType}`);
+  } else {
+    setSync("Attendance saved offline — will sync when back online");
+    showToast(`Saved offline — ${member ? fullName(member) : "member"}'s attendance will sync when back online`);
   }
   closeDetail();
 }
 
-function showUndoBar(recordId, sheet, message) {
+function showToast(message, options) {
+  options = options || {};
   const bar = document.createElement("div");
-  bar.style.cssText = "position:fixed;bottom:76px;left:16px;right:16px;background:var(--blue-dark);color:white;border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:70;font-size:13px;";
-  bar.innerHTML = `<span>${message}</span><button style="background:none;border:none;color:#8FC1FF;font-weight:700;font-size:13px;" onclick="undoRecord('${sheet}','${recordId}', this.parentElement)">UNDO</button>`;
+  bar.style.cssText = `position:fixed;bottom:76px;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:420px;background:${options.error ? "var(--red)" : "var(--blue-dark)"};color:white;border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;z-index:70;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,0.18);`;
+  bar.innerHTML = `<span>${message}</span>` + (options.actionLabel ? `<button style="background:none;border:none;color:#8FC1FF;font-weight:700;font-size:13px;flex-shrink:0;">${options.actionLabel}</button>` : "");
+  if (options.actionLabel && options.onAction) {
+    bar.querySelector("button").addEventListener("click", () => { options.onAction(); if (bar.parentElement) bar.remove(); });
+  }
   document.body.appendChild(bar);
-  setTimeout(() => { if (bar.parentElement) bar.remove(); }, 6000);
+  setTimeout(() => { if (bar.parentElement) bar.remove(); }, options.duration || 3000);
+  return bar;
+}
+function showUndoBar(recordId, sheet, message) {
+  showToast(message, { actionLabel:"UNDO", onAction: () => undoRecord(sheet, recordId), duration:6000 });
 }
 async function undoRecord(sheet, id, barEl) {
   if (barEl) barEl.remove();
@@ -1074,8 +1090,18 @@ async function moveRecord(fromSheet, toSheet, id) {
   setSync("Moving record...");
   const data = { FirstName:r.FirstName, Surname:r.Surname, Phone:r.Phone };
   const result = await apiPost({ action:"move", fromSheet, toSheet, id, data, adminName: getAdminName() });
-  if (!result.offline) { setSync("Moved"); loadAll(); }
-  else { setSync("Move saved offline — will sync when back online"); }
+  if (result.offline) {
+    setSync("Move saved offline — will sync when back online");
+    showToast(`Saved offline — ${fullName(r)} will move to ${toSheet} once back online`);
+  } else if (result && result.success === false) {
+    setSync("Move failed");
+    showToast(`Couldn't move ${fullName(r)} — please try again`, { error:true });
+    await loadAll();
+  } else {
+    setSync("Moved");
+    showToast(`${fullName(r)} moved to ${toSheet} ✅`);
+    loadAll();
+  }
   closeDetail();
 }
 
@@ -1086,14 +1112,35 @@ function confirmDelete(sheet, id, name) {
   }
   deleteRecord(sheet, id);
 }
+function getDisplayName(sheet, record) {
+  if (!record) return "record";
+  if (sheet === "Congregations") return record.Name || "congregation";
+  if (sheet === "Attendance") return "attendance entry";
+  return fullName(record) || "record";
+}
+
 async function deleteRecord(sheet, id) {
+  const existing = findRecord(sheet, id);
+  const displayName = getDisplayName(sheet, existing);
   setSync("Deleting...");
   const result = await apiPost(
     { action:"delete", sheet, id, adminName: getAdminName() },
     () => { cache[sheet] = (cache[sheet]||[]).filter(r => String(r.ID) !== String(id)); renderList(sheet); }
   );
-  if (!result.offline) { setSync("Deleted"); loadAll(); }
-  else { setSync("Delete saved offline — will sync when back online"); }
+  if (result.offline) {
+    setSync("Delete saved offline — will sync when back online");
+    showToast(`Saved offline — ${displayName} will be deleted once back online`);
+  } else if (result && result.success === false) {
+    // The server rejected the delete — resync from source of truth so the record
+    // reappears instead of staying (wrongly) removed from view.
+    setSync("Delete failed on the server — restoring record");
+    showToast(`Couldn't delete ${displayName} — restoring it`, { error:true });
+    await loadAll();
+  } else {
+    setSync("Deleted");
+    showToast(`${displayName} deleted`);
+    loadAll();
+  }
   closeDetail();
 }
 
@@ -1149,6 +1196,7 @@ function openForm(sheet, id) {
     const data = {};
     fields.forEach(f => data[f] = e.target[f].value);
     setSync("Saving...");
+    const displayName = ((data.FirstName||"") + " " + (data.Surname||"")).trim() || sheet.slice(0,-1);
     let result;
     if (id) {
       result = await apiPost(
@@ -1167,8 +1215,18 @@ function openForm(sheet, id) {
         () => { cache[sheet].push({ ID: tempId, ...data }); renderList(sheet); }
       );
     }
-    if (!result.offline) { setSync("Saved"); loadAll(); }
-    else { setSync("Saved offline — will appear for others once you're back online"); }
+    if (result.offline) {
+      setSync("Saved offline — will appear for others once you're back online");
+      showToast(`Saved offline — ${displayName} will sync when back online`);
+    } else if (result && result.success === false) {
+      setSync("Save failed");
+      showToast(`Couldn't save ${displayName} — please try again`, { error:true });
+      await loadAll();
+    } else {
+      setSync("Saved");
+      showToast(`${id ? "Updated" : "Added"} ${displayName} ✅`);
+      loadAll();
+    }
     closeDetail();
   });
   document.getElementById("detailOverlay").classList.add("show");
@@ -1186,6 +1244,18 @@ function getSundaysDescending(count) {
   return dates;
 }
 
+// Pulls the actual most recent distinct service dates for the selected service type from
+// real attendance records, instead of assuming every service happens on a Sunday — this
+// fixes Midweek/Special Program streaks being checked against Sunday-only dates.
+function getRecentServiceDates(serviceType, count) {
+  const dates = Array.from(new Set(
+    cache.Attendance
+      .filter(a => !serviceType || a.ServiceType === serviceType)
+      .map(a => String(a.Date).slice(0,10))
+  )).sort((a,b) => b.localeCompare(a));
+  return dates.slice(0, count);
+}
+
 function renderAbsentees() {
   const threshold = parseInt(document.getElementById("absentFilter").value, 10);
   const serviceType = document.getElementById("serviceFilter").value; // "" = all services
@@ -1196,11 +1266,11 @@ function renderAbsentees() {
     `).join("") || `<div class="empty">No members yet</div>`;
     return;
   }
-  const recentSundays = getSundaysDescending(threshold);
+  const recentDates = getRecentServiceDates(serviceType, threshold);
   const attendedSet = {};
   cache.Attendance.forEach(a => {
     if (serviceType && a.ServiceType !== serviceType) return; // only count the selected service type
-    if (recentSundays.includes(String(a.Date).slice(0,10))) {
+    if (recentDates.includes(String(a.Date).slice(0,10))) {
       attendedSet[a.MemberID] = attendedSet[a.MemberID] || new Set();
       attendedSet[a.MemberID].add(String(a.Date).slice(0,10));
     }
@@ -1399,8 +1469,11 @@ function renderAnalysis() {
 }
 
 /* ============ POPUPS: BIRTHDAYS + ABSENTEE ALERTS ============ */
+const POPUP_SHOWN_KEY = "coc_popup_shown_date";
 function checkPopups() {
   const today = new Date();
+  const todayKey = today.toISOString().slice(0,10);
+  if (sessionStorage.getItem(POPUP_SHOWN_KEY) === todayKey) return; // already shown today — don't reopen on every silent background refresh
   const mm = today.getMonth()+1, dd = today.getDate();
   const upcoming = cache.Members.filter(m => {
     if (!m.Birthdate) return false;
@@ -1409,6 +1482,7 @@ function checkPopups() {
     return diff >= 0 && diff <= 7;
   });
   if (upcoming.length > 0) {
+    sessionStorage.setItem(POPUP_SHOWN_KEY, todayKey);
     document.getElementById("popupBody").innerHTML = `
       <h3>🎉 Birthdays this week</h3>
       ${upcoming.map(m => `<p>${fullName(m)}</p>`).join("")}
