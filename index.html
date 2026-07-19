@@ -226,15 +226,34 @@
   }
   @keyframes spin{ to{transform:rotate(360deg);} }
 
-  /* On wider screens (desktop/tablet), keep the app at a phone-like column instead of stretching full-bleed —
-     this rule must stay LAST in the stylesheet so it wins over the earlier base rules for these same elements. */
+  /* On wider screens (desktop/tablet), let the app scale up to use the available width
+     instead of staying locked at phone width — this rule must stay LAST in the stylesheet
+     so it wins over the earlier base rules for these same elements. */
   @media (min-width: 560px) {
-    body{ max-width:480px; margin:0 auto; box-shadow:0 0 40px rgba(15,30,50,0.14); min-height:100vh; }
-    header.app-header{ max-width:480px; margin:0 auto; }
-    nav.bottom{ left:50%; right:auto; transform:translateX(-50%); width:100%; max-width:480px; }
+    :root{ --app-max: 1200px; }
+    body{ max-width:var(--app-max); margin:0 auto; box-shadow:0 0 40px rgba(15,30,50,0.14); min-height:100vh; }
+    header.app-header{ max-width:var(--app-max); margin:0 auto; }
+    main{ max-width:var(--app-max); margin:0 auto; }
+    nav.bottom{ left:50%; right:auto; transform:translateX(-50%); width:100%; max-width:var(--app-max); }
     .lock-overlay, .walk-overlay, .name-overlay, .splash-screen{
-      max-width:480px; left:50%; right:auto; transform:translateX(-50%);
+      max-width:var(--app-max); left:50%; right:auto; transform:translateX(-50%);
     }
+    /* Reflow the record lists into a responsive multi-column grid so cards don't
+       stretch edge-to-edge and look empty on a wide screen — same cards, same data,
+       just laid out to fit the space (this is what actually fixes the "still phone-sized"
+       feel without shrinking or blurring anything). */
+    #memberResults, #visitorResults, #prospectResults, #congResults,
+    #absenteeResults, #serviceAbsenteeResults, #bulletinResults{
+      display:grid;
+      grid-template-columns:repeat(auto-fill, minmax(280px,1fr));
+      gap:12px;
+      align-items:start;
+    }
+    #memberResults .card, #visitorResults .card, #prospectResults .card, #congResults .card,
+    #absenteeResults .card, #serviceAbsenteeResults .card, #bulletinResults .card{
+      margin-bottom:0;
+    }
+    .snapshot-grid{ grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); }
   }
 </style>
 </head>
