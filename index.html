@@ -36,12 +36,14 @@
     position:sticky; top:0; z-index:10;
     box-shadow:0 2px 10px rgba(15,30,50,0.18);
   }
-  .role-pill{
-    margin-left:auto; background:rgba(255,255,255,0.16); color:var(--white);
-    font-size:11px; font-weight:700; padding:6px 12px; border-radius:20px; cursor:pointer;
-    white-space:nowrap; transition:background 0.15s ease;
+  .role-toggle{
+    margin-left:auto; display:flex; background:rgba(255,255,255,0.16); border-radius:20px; padding:3px;
   }
-  .role-pill:active{background:rgba(255,255,255,0.3);}
+  .role-seg{
+    font-size:11px; font-weight:700; padding:6px 12px; border-radius:20px; cursor:pointer;
+    color:rgba(255,255,255,0.75); transition:background 0.15s ease, color 0.15s ease; white-space:nowrap;
+  }
+  .role-seg.active{ background:var(--white); color:var(--blue-dark); }
   header.app-header img{width:36px;height:36px;border-radius:8px;background:var(--white);object-fit:cover;}
   header.app-header .title{font-size:16px; font-weight:700; line-height:1.2;}
   header.app-header .sub{font-size:11px; opacity:0.85;}
@@ -202,11 +204,35 @@
   .walk-dots span.active{background:var(--red);}
   .walk-actions{display:flex; gap:10px;}
 
+  /* SPLASH SCREEN — shown briefly while the app does its first sync */
+  .splash-screen{
+    position:fixed; inset:0; z-index:200;
+    background:linear-gradient(160deg, var(--blue) 0%, var(--blue-dark) 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transition:opacity 0.4s ease;
+  }
+  .splash-screen.hide{ opacity:0; pointer-events:none; }
+  .splash-logo{
+    width:96px; height:96px; border-radius:20px; background:white; object-fit:contain; padding:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.25);
+    animation:splashPop 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes splashPop{ from{transform:scale(0.6); opacity:0;} to{transform:scale(1); opacity:1;} }
+  .splash-title{color:white; font-weight:700; font-size:16px; margin-top:16px; text-align:center; padding:0 30px;}
+  .splash-spinner{
+    margin-top:22px; width:26px; height:26px; border-radius:50%;
+    border:3px solid rgba(255,255,255,0.25); border-top-color:var(--red);
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{ to{transform:rotate(360deg);} }
+
+  /* On wider screens (desktop/tablet), keep the app at a phone-like column instead of stretching full-bleed —
+     this rule must stay LAST in the stylesheet so it wins over the earlier base rules for these same elements. */
   @media (min-width: 560px) {
     body{ max-width:480px; margin:0 auto; box-shadow:0 0 40px rgba(15,30,50,0.14); min-height:100vh; }
     header.app-header{ max-width:480px; margin:0 auto; }
     nav.bottom{ left:50%; right:auto; transform:translateX(-50%); width:100%; max-width:480px; }
-    .lock-overlay, .walk-overlay, .name-overlay{
+    .lock-overlay, .walk-overlay, .name-overlay, .splash-screen{
       max-width:480px; left:50%; right:auto; transform:translateX(-50%);
     }
   }
@@ -214,6 +240,14 @@
 </head>
 <body>
 
+<!-- SPLASH SCREEN — first thing shown, fades out once the app is ready -->
+<div class="splash-screen" id="splashScreen">
+  <img src="icon-192.png" class="splash-logo" alt="logo" onerror="this.style.display='none'">
+  <div class="splash-title">Church of Christ Online Archive</div>
+  <div class="splash-spinner"></div>
+</div>
+
+<!-- ADMIN LOGIN — only shown when someone taps "Admin"; members never see this -->
 <div class="lock-overlay" id="lockOverlay" style="display:none;">
   <div class="lock-box">
     <img src="icon-192.png" alt="logo" onerror="this.style.display='none'">
@@ -226,10 +260,12 @@
   </div>
 </div>
 
+<!-- FIRST-OPEN WALKTHROUGH — shown once, skippable, after unlocking -->
 <div class="walk-overlay" id="walkOverlay">
   <div class="walk-box" id="walkBox"></div>
 </div>
 
+<!-- ADMIN NAME CAPTURE — asked once per device, so records show who did what -->
 <div class="name-overlay" id="nameOverlay">
   <div class="lock-box">
     <h2>Quick one before you start</h2>
@@ -245,7 +281,10 @@
     <div class="title">Church of Christ Online Archive</div>
     <div class="sub" id="screenLabel">Members</div>
   </div>
-  <div class="role-pill" id="rolePill" onclick="openAdminLogin()">Admin</div>
+  <div class="role-toggle" id="roleToggle">
+    <div class="role-seg" id="segAdmin" onclick="handleSegTap('admin')">Admin</div>
+    <div class="role-seg" id="segMember" onclick="handleSegTap('member')">Member</div>
+  </div>
 </header>
 
 <main>
@@ -255,6 +294,7 @@
   </div>
   <div class="sync-status" id="syncStatus">Ready</div>
 
+  <!-- MEMBERS SCREEN -->
   <section class="screen active" id="screen-members">
     <div class="searchbar">
       <input type="text" id="memberSearch" placeholder="Search a member's full name...">
@@ -275,6 +315,7 @@
     <div id="memberResults"></div>
   </section>
 
+  <!-- ATTENDANCE SCREEN -->
   <section class="screen" id="screen-attendance">
     <div class="filter-row">
       <label style="font-size:13px;color:var(--muted);font-weight:600;">Service:</label>
@@ -314,26 +355,29 @@
     <div id="serviceAbsenteeResults"></div>
   </section>
 
+  <!-- VISITORS SCREEN -->
   <section class="screen" id="screen-visitors">
     <div class="searchbar">
       <input type="text" id="visitorSearch" placeholder="Search a visitor's full name...">
       <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
       <button class="btn ghost" onclick="printScreen('Visitors')" title="Print">🖶</button>
-      <button class="btn admin-only" onclick="openForm('Visitors', null)">+ Add</button>
+      <button class="btn" onclick="openForm('Visitors', null)">+ Add</button>
     </div>
     <div id="visitorResults"></div>
   </section>
 
+  <!-- PROSPECTS SCREEN -->
   <section class="screen" id="screen-prospects">
     <div class="searchbar">
       <input type="text" id="prospectSearch" placeholder="Search a prospect's full name...">
       <button class="btn ghost" onclick="loadAll(true)" title="Refresh">⟳</button>
       <button class="btn ghost" onclick="printScreen('Prospects')" title="Print">🖶</button>
-      <button class="btn admin-only" onclick="openForm('Prospects', null)">+ Add</button>
+      <button class="btn" onclick="openForm('Prospects', null)">+ Add</button>
     </div>
     <div id="prospectResults"></div>
   </section>
 
+  <!-- CONGREGATIONS SCREEN -->
   <section class="screen" id="screen-congregations">
     <div class="searchbar">
       <input type="text" id="congSearch" placeholder="Search a congregation...">
@@ -343,6 +387,7 @@
     <div id="congResults"></div>
   </section>
 
+  <!-- BULLETIN SCREEN -->
   <section class="screen" id="screen-bulletin">
     <div class="searchbar">
       <div style="flex:1;font-size:13px;color:var(--muted);align-self:center;">Latest from the church website</div>
@@ -352,6 +397,7 @@
     <a class="btn ghost block" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box;margin-top:10px;" href="https://cocigbogbo.blogspot.com/" target="_blank" rel="noopener">Visit the full website</a>
   </section>
 
+  <!-- REPORTS SCREEN -->
   <section class="screen" id="screen-reports">
     <div class="snapshot-grid">
       <div class="stat"><div class="num" id="statMembers">-</div><div class="label">Active members</div></div>
@@ -391,10 +437,12 @@
   </section>
 </main>
 
+<!-- Detail / Edit overlay -->
 <div class="detail-overlay" id="detailOverlay">
   <div class="sheet" id="detailSheet"></div>
 </div>
 
+<!-- Popup for birthdays / alerts -->
 <div class="popup-overlay" id="popupOverlay">
   <div class="popup" id="popupBody"></div>
 </div>
@@ -406,25 +454,29 @@
   <button class="admin-only" onclick="openMoreMenu()"><div class="dot"></div>More</button>
 </nav>
 
+<!-- MORE MENU (admin only) — holds the less-frequently-used tabs so the bar stays uncluttered -->
 <div class="detail-overlay" id="moreOverlay">
   <div class="sheet">
-    <button class="close-x" onclick="closeMoreMenu()">×</button>
+    <button class="close-x" onclick="closeMoreMenu()">&times;</button>
     <h2>More</h2>
     <button class="btn ghost block" style="margin-top:14px;" onclick="goToFromMore('attendance')">Attendance</button>
     <button class="btn ghost block" style="margin-top:10px;" onclick="goToFromMore('visitors')">Visitors</button>
     <button class="btn ghost block" style="margin-top:10px;" onclick="goToFromMore('prospects')">Prospects</button>
-    <button class="btn ghost block" style="margin-top:10px;" onclick="goToFromMore('reports')">Reports & Analysis</button>
+    <button class="btn ghost block" style="margin-top:10px;" onclick="goToFromMore('reports')">Reports &amp; Analysis</button>
   </div>
 </div>
 
 <script>
 /* ============ CONFIG ============ */
 const API_URL = "https://script.google.com/macros/s/AKfycbz4gBgh_qKofWUqIH-EPUoO1uQ97FPvV-QaqbuDniZWIPnn1aisdOZHTfIC6SdQqQTx1A/exec";
+
+// Shared passcode the admin team uses to open the app on their phones.
+// Change this before publishing, and share it only with your admin/usher team.
+// Only admins need a passcode. Members open the app directly with no login at all.
+// Change this before publishing, and share it only with your admin/usher team.
 const APP_PASSCODE = "2510";
-const ADMIN_AUTH_KEY = "coc_admin_authenticated"; 
-const ACTIVE_ROLE_KEY = "coc_active_role";        
-const ADMIN_NAME_KEY = "coc_admin_name";
-const WALK_KEY = "coc_walkthrough_seen_session"; 
+const ADMIN_AUTH_KEY = "coc_admin_authenticated"; // this device has successfully entered the admin passcode at least once
+const ACTIVE_ROLE_KEY = "coc_active_role";        // "admin" or "member" — which view is currently showing
 
 function isAdminAuthenticated() { return localStorage.getItem(ADMIN_AUTH_KEY) === "yes"; }
 function getActiveRole() {
@@ -434,6 +486,7 @@ function getActiveRole() {
 function isAdmin() { return getActiveRole() === "admin"; }
 function getRole() { return getActiveRole(); }
 
+const ADMIN_NAME_KEY = "coc_admin_name";
 function getAdminName() { return localStorage.getItem(ADMIN_NAME_KEY) || ""; }
 function saveAdminName() {
   const val = document.getElementById("nameInput").value.trim();
@@ -442,7 +495,6 @@ function saveAdminName() {
   document.getElementById("nameOverlay").classList.remove("show");
   maybeShowWalkthrough();
 }
-
 function checkAdminName() {
   if (getAdminName()) {
     apiPost({ action:"login", name:getAdminName(), role:getRole() }).catch(()=>{});
@@ -451,7 +503,6 @@ function checkAdminName() {
     document.getElementById("nameOverlay").classList.add("show");
   }
 }
-
 function applyRoleToUI() {
   const adminOnlyNav = ["attendance","visitors","prospects","reports"];
   document.querySelectorAll("nav.bottom button").forEach(btn => {
@@ -467,70 +518,63 @@ function applyRoleToUI() {
 }
 
 function checkLock() {
-  // Clear names and walkthrough tokens from permanent storage so they reset when app opens fresh
-  localStorage.removeItem(ADMIN_NAME_KEY);
-  localStorage.removeItem("coc_walkthrough_seen");
-  
+  // Members: no gate at all — go straight into the app.
+  // Admins who already authenticated on this device: also go straight in, in whichever
+  // view (admin/member) they were last in.
   document.getElementById("lockOverlay").style.display = "none";
   applyRoleToUI();
   updateRolePill();
   if (isAdmin()) checkAdminName();
   else maybeShowWalkthrough();
 }
-
 function openAdminLogin() {
-  // Always trigger the name modal when logging back into admin actions
-  localStorage.removeItem(ADMIN_NAME_KEY);
   document.getElementById("lockOverlay").style.display = "flex";
   document.getElementById("lockInput").value = "";
   document.getElementById("lockError").textContent = "";
   document.getElementById("lockInput").focus();
 }
-
 function closeAdminLogin() {
   document.getElementById("lockOverlay").style.display = "none";
 }
-
 function tryUnlock() {
   const val = document.getElementById("lockInput").value;
   if (val === APP_PASSCODE) {
     localStorage.setItem(ADMIN_AUTH_KEY, "yes");
     localStorage.setItem(ACTIVE_ROLE_KEY, "admin");
-    sessionStorage.removeItem(WALK_KEY);
     document.getElementById("lockOverlay").style.display = "none";
     applyRoleToUI();
     updateRolePill();
-    checkAdminName();
+    // Ask for the name every time someone logs in as admin, per your request —
+    // this re-attributes each admin session in the audit log, not just the first ever login.
+    document.getElementById("nameOverlay").classList.add("show");
   } else {
     document.getElementById("lockError").textContent = "Incorrect passcode — try again";
   }
 }
-
 function toggleAdminMemberView() {
   const next = isAdmin() ? "member" : "admin";
   localStorage.setItem(ACTIVE_ROLE_KEY, next);
-  if (next === "admin") {
-    localStorage.removeItem(ADMIN_NAME_KEY);
-  }
   applyRoleToUI();
   updateRolePill();
   showScreenByName("members");
-  if (isAdmin()) checkAdminName();
 }
-
-function updateRolePill() {
-  const pill = document.getElementById("rolePill");
-  if (!isAdminAuthenticated()) {
-    pill.textContent = "Admin";
-    pill.onclick = openAdminLogin;
-  } else if (isAdmin()) {
-    pill.textContent = "Admin view";
-    pill.onclick = toggleAdminMemberView;
+function handleSegTap(target) {
+  if (target === "admin") {
+    if (isAdminAuthenticated()) {
+      if (!isAdmin()) toggleAdminMemberView();
+    } else {
+      openAdminLogin();
+    }
   } else {
-    pill.textContent = "Member view";
-    pill.onclick = toggleAdminMemberView;
+    if (isAdmin()) toggleAdminMemberView();
   }
 }
+function updateRolePill() {
+  document.getElementById("segAdmin").classList.toggle("active", isAdmin());
+  document.getElementById("segMember").classList.toggle("active", !isAdmin());
+}
+// checkLock() now runs at the very end of this script — see the INIT section below —
+// so that everything it might trigger (walkthrough, forms, etc.) is already declared by then.
 
 /* ============ FIRST-OPEN WALKTHROUGH ============ */
 const WALK_STEPS = [
@@ -559,23 +603,23 @@ function nextWalkStep() {
   renderWalkStep();
 }
 function skipWalkthrough() {
-  sessionStorage.setItem(WALK_KEY, "yes");
   document.getElementById("walkOverlay").classList.remove("show");
 }
 function maybeShowWalkthrough() {
-  if (sessionStorage.getItem(WALK_KEY) !== "yes") {
-    walkIndex = 0;
-    renderWalkStep();
-    document.getElementById("walkOverlay").classList.add("show");
-  }
+  // Shows every time the app opens, per your request — if this ever feels repetitive
+  // for regular members, just ask and I'll switch it back to "once per device."
+  walkIndex = 0;
+  renderWalkStep();
+  document.getElementById("walkOverlay").classList.add("show");
 }
 
-checkLock();
 
 /* ============ STATE ============ */
 let cache = { Members: [], Attendance: [], Visitors: [], Prospects: [], Congregations: [] };
 
 /* ============ OFFLINE QUEUE ============ */
+// Anything added/edited while offline gets stored here and replayed
+// automatically the moment the connection comes back.
 const QUEUE_KEY = "coc_pending_queue";
 
 function getQueue() {
@@ -608,9 +652,9 @@ async function flushQueue() {
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(item.payload)
       });
-      await res.json();
+      await res.json(); // confirms it actually reached the server
     } catch (err) {
-      remaining.push(item);
+      remaining.push(item); // still offline or failed — keep it queued
     }
   }
   saveQueue(remaining);
@@ -624,6 +668,7 @@ async function flushQueue() {
 
 window.addEventListener("online", flushQueue);
 
+
 /* ============ API HELPERS ============ */
 async function apiGet(action, sheet, extra) {
   const params = new URLSearchParams({ action, sheet, ...(extra || {}) });
@@ -631,7 +676,7 @@ async function apiGet(action, sheet, extra) {
   return res.json();
 }
 async function apiPost(payload, optimisticUpdate) {
-  if (optimisticUpdate) optimisticUpdate(); 
+  if (optimisticUpdate) optimisticUpdate(); // update the on-screen list immediately, don't wait on the network
   if (!navigator.onLine) {
     queueAction(payload);
     return { success: true, offline: true };
@@ -644,6 +689,7 @@ async function apiPost(payload, optimisticUpdate) {
     });
     return await res.json();
   } catch (err) {
+    // fetch itself failed (e.g. signal dropped mid-request) — queue it rather than lose it
     queueAction(payload);
     return { success: true, offline: true };
   }
@@ -674,6 +720,17 @@ function showScreen(name) {
 }
 function showScreenByName(name) { showScreen(name); }
 
+/* ============ SPLASH SCREEN ============ */
+function hideSplash() {
+  const el = document.getElementById("splashScreen");
+  if (el && !el.classList.contains("hide")) {
+    el.classList.add("hide");
+    setTimeout(() => el.remove(), 450);
+  }
+}
+// Safety net: never let a slow/offline first load leave the splash stuck on screen
+setTimeout(hideSplash, 3500);
+
 /* ============ LOAD DATA ============ */
 async function loadAll(manual) {
   setSync("Syncing...");
@@ -698,12 +755,14 @@ async function loadAll(manual) {
     renderList("Prospects");
     renderCongList();
     checkPopups();
+    hideSplash();
   } catch (err) {
     setSync("Offline — showing last saved data");
+    hideSplash();
   }
 }
 
-/* ============ BULLETIN ============ */
+/* ============ BULLETIN (LATEST FROM THE CHURCH WEBSITE) ============ */
 function loadBulletin() {
   const container = document.getElementById("bulletinResults");
   container.innerHTML = `<div class="empty">Loading latest posts...</div>`;
@@ -749,7 +808,7 @@ function renderBulletin(json) {
   }).join("");
 }
 
-/* ============ CONGREGATIONS ============ */
+/* ============ CONGREGATIONS (NEARBY CHURCHES) ============ */
 function mapsLink(address) {
   return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address || "");
 }
@@ -777,7 +836,7 @@ function openCongDetail(id) {
   const r = (cache.Congregations||[]).find(c => String(c.ID) === String(id));
   if (!r) return;
   document.getElementById("detailSheet").innerHTML = `
-    <button class="close-x" onclick="closeDetail()">×</button>
+    <button class="close-x" onclick="closeDetail()">&times;</button>
     <h2>${r.Name}</h2>
     <p style="color:var(--muted);font-size:13px;margin-top:0;">${r.Address||""}</p>
     <div style="font-size:13px;color:var(--text);background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
@@ -798,7 +857,7 @@ function openCongForm(id) {
   const existing = id ? (cache.Congregations||[]).find(c => String(c.ID)===String(id)) : {};
   const fields = ["Name","Address","ContactPerson","ContactPhone","Notes"];
   document.getElementById("detailSheet").innerHTML = `
-    <button class="close-x" onclick="closeDetail()">×</button>
+    <button class="close-x" onclick="closeDetail()">&times;</button>
     <h2>${id ? "Edit" : "Add"} congregation</h2>
     <form id="congForm">
       ${fields.map(f => `
@@ -813,7 +872,7 @@ function openCongForm(id) {
   document.getElementById("congForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = {};
-    fields.forEach(f => { if(e.target[f]) data[f] = e.target[f].value; });
+    fields.forEach(f => data[f] = e.target[f].value);
     setSync("Saving...");
     let result;
     if (id) {
@@ -825,15 +884,11 @@ function openCongForm(id) {
       const tempId = "pending-" + Date.now();
       result = await apiPost(
         { action:"add", sheet:"Congregations", data, adminName:getAdminName() },
-        () => { 
-          if(!cache.Congregations) cache.Congregations = [];
-          cache.Congregations.push({ ID: tempId, ...data }); 
-          renderCongList(); 
-        }
+        () => { cache.Congregations.push({ ID: tempId, ...data }); renderCongList(); }
       );
     }
     if (!result.offline) { setSync("Saved"); loadAll(); }
-    else { setSync("Saved offline"); }
+    else { setSync("Saved offline — will sync when back online"); }
     closeDetail();
   });
   document.getElementById("detailOverlay").classList.add("show");
@@ -845,7 +900,6 @@ function fullName(r){ return ((r.FirstName||"") + " " + (r.Surname||"")).trim();
 function renderList(sheet, filterText) {
   const containerId = { Members:"memberResults", Visitors:"visitorResults", Prospects:"prospectResults" }[sheet];
   const container = document.getElementById(containerId);
-  if(!container) return;
   let rows = cache[sheet] || [];
   if (filterText) {
     const q = filterText.toLowerCase();
@@ -860,7 +914,7 @@ function renderList(sheet, filterText) {
     if (attFilter && attFilter.value) {
       const now = new Date();
       const attendedThisMonthIds = new Set(
-        (cache.Attendance || [])
+        cache.Attendance
           .filter(a => { const d = new Date(a.Date); return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth(); })
           .map(a => String(a.MemberID))
       );
@@ -895,13 +949,10 @@ function refreshDeptFilterOptions() {
 }
 
 ["memberSearch","visitorSearch","prospectSearch"].forEach(id => {
-  const el = document.getElementById(id);
-  if(el) {
-    el.addEventListener("input", (e) => {
-      const sheet = { memberSearch:"Members", visitorSearch:"Visitors", prospectSearch:"Prospects" }[id];
-      renderList(sheet, e.target.value);
-    });
-  }
+  document.getElementById(id).addEventListener("input", (e) => {
+    const sheet = { memberSearch:"Members", visitorSearch:"Visitors", prospectSearch:"Prospects" }[id];
+    renderList(sheet, e.target.value);
+  });
 });
 document.getElementById("congSearch").addEventListener("input", (e) => renderCongList(e.target.value));
 
@@ -915,9 +966,10 @@ function openDetail(sheet, id) {
   if (!r) return;
   const today = new Date().toISOString().slice(0,10);
 
+  // Members viewed by a non-admin see only the public-directory fields, no edit/delete/attendance controls
   if (sheet === "Members" && !isAdmin()) {
     document.getElementById("detailSheet").innerHTML = `
-      <button class="close-x" onclick="closeDetail()">×</button>
+      <button class="close-x" onclick="closeDetail()">&times;</button>
       <h2>${fullName(r)}</h2>
       <div style="font-size:14px;color:var(--text);background:var(--bg);border-radius:10px;padding:12px;">
         <div><strong>Phone:</strong> ${r.Phone||"—"}</div>
@@ -946,7 +998,7 @@ function openDetail(sheet, id) {
   }
 
   document.getElementById("detailSheet").innerHTML = `
-    <button class="close-x" onclick="closeDetail()">×</button>
+    <button class="close-x" onclick="closeDetail()">&times;</button>
     <h2>${fullName(r)}</h2>
     <p style="color:var(--muted);font-size:13px;margin-top:0;">${r.Phone||""}</p>
     ${sheet==="Members" ? `
@@ -973,14 +1025,12 @@ async function markAttendance(memberId) {
   setSync("Saving attendance...");
   const result = await apiPost(
     { action:"markAttendance", memberId, date:today, serviceType, markedBy },
-    () => {
-      if(!cache.Attendance) cache.Attendance = [];
-      cache.Attendance.push({ ID:"pending", MemberID:memberId, Date:today, ServiceType:serviceType, MarkedBy:markedBy });
-    }
+    () => cache.Attendance.push({ ID:"pending", MemberID:memberId, Date:today, ServiceType:serviceType, MarkedBy:markedBy })
   );
   if (!result.offline) {
     setSync("Attendance saved");
     await loadAll();
+    // Find the record we just created so Undo can remove that exact one
     const justMarked = cache.Attendance.find(a => String(a.MemberID)===String(memberId) && a.Date===today && a.ServiceType===serviceType);
     if (justMarked) showUndoBar(justMarked.ID, "Attendance", `Marked present for ${serviceType}`);
   }
@@ -1036,10 +1086,8 @@ const FORM_FIELDS = {
 };
 
 function openForm(sheet, id) {
-  const existing = (id && id !== "null") ? (findRecord(sheet, id) || {}) : {};
+  const existing = id ? findRecord(sheet, id) : {};
   const fields = FORM_FIELDS[sheet];
-  if(!fields) return;
-  
   const DATE_FIELDS = ["Birthdate", "JoinDate", "DateVisited", "DateContacted"];
   const LABELS = {
     EmergencyContactName: "Emergency contact — name",
@@ -1067,7 +1115,7 @@ function openForm(sheet, id) {
       <input type="${DATE_FIELDS.includes(f) ? "date" : "text"}" name="${f}" value="${existing[f]||""}"></div>`;
   };
   document.getElementById("detailSheet").innerHTML = `
-    <button class="close-x" onclick="closeDetail()">×</button>
+    <button class="close-x" onclick="closeDetail()">&times;</button>
     <h2>${id ? "Edit" : "Add"} ${sheet.slice(0,-1)}</h2>
     <form id="recordForm">
       ${fields.map(fieldHTML).join("")}
@@ -1080,34 +1128,28 @@ function openForm(sheet, id) {
   document.getElementById("recordForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = {};
-    fields.forEach(f => { if(e.target[f]) data[f] = e.target[f].value; });
+    fields.forEach(f => data[f] = e.target[f].value);
     setSync("Saving...");
     let result;
-    if (id && id !== "null") {
+    if (id) {
       result = await apiPost(
         { action:"update", sheet, id, data, adminName: getAdminName() },
         () => { Object.assign(findRecord(sheet, id) || {}, data); renderList(sheet); }
       );
     } else {
       const newFullName = ((data.FirstName||"") + " " + (data.Surname||"")).trim().toLowerCase();
-      const safeCache = cache[sheet] || [];
-      const possibleDupe = safeCache.find(r => fullName(r).toLowerCase() === newFullName);
-      if (possibleDupe && !confirm(`"${newFullName}" looks like it might already be in ${sheet}. Add anyway?`)) {
-        setSync("Ready");
+      const possibleDupe = (cache[sheet]||[]).find(r => fullName(r).toLowerCase() === newFullName);
+      if (possibleDupe && !confirm(`"${newFullName}" looks like it might already be in ${sheet} (${possibleDupe.Phone||"no phone on file"}). Add anyway?`)) {
         return;
       }
       const tempId = "pending-" + Date.now();
       result = await apiPost(
         { action:"add", sheet, data, adminName: getAdminName() },
-        () => { 
-          if(!cache[sheet]) cache[sheet] = [];
-          cache[sheet].push({ ID: tempId, ...data }); 
-          renderList(sheet); 
-        }
+        () => { cache[sheet].push({ ID: tempId, ...data }); renderList(sheet); }
       );
     }
     if (!result.offline) { setSync("Saved"); loadAll(); }
-    else { setSync("Saved offline"); }
+    else { setSync("Saved offline — will appear for others once you're back online"); }
     closeDetail();
   });
   document.getElementById("detailOverlay").classList.add("show");
@@ -1117,7 +1159,7 @@ function openForm(sheet, id) {
 function getSundaysDescending(count) {
   const dates = [];
   const d = new Date();
-  d.setDate(d.getDate() - d.getDay()); 
+  d.setDate(d.getDate() - d.getDay()); // back to most recent Sunday
   for (let i=0;i<count;i++){
     dates.push(new Date(d).toISOString().slice(0,10));
     d.setDate(d.getDate()-7);
@@ -1127,25 +1169,24 @@ function getSundaysDescending(count) {
 
 function renderAbsentees() {
   const threshold = parseInt(document.getElementById("absentFilter").value, 10);
-  const serviceType = document.getElementById("serviceFilter").value; 
+  const serviceType = document.getElementById("serviceFilter").value; // "" = all services
   const container = document.getElementById("absenteeResults");
-  if(!container) return;
   if (threshold === 0) {
-    container.innerHTML = (cache.Members || []).map(m => `
+    container.innerHTML = cache.Members.map(m => `
       <div class="card"><div class="name">${fullName(m)}</div><div class="meta">${m.Department||""}</div></div>
     `).join("") || `<div class="empty">No members yet</div>`;
     return;
   }
   const recentSundays = getSundaysDescending(threshold);
   const attendedSet = {};
-  (cache.Attendance || []).forEach(a => {
-    if (serviceType && a.ServiceType !== serviceType) return; 
+  cache.Attendance.forEach(a => {
+    if (serviceType && a.ServiceType !== serviceType) return; // only count the selected service type
     if (recentSundays.includes(String(a.Date).slice(0,10))) {
       attendedSet[a.MemberID] = attendedSet[a.MemberID] || new Set();
       attendedSet[a.MemberID].add(String(a.Date).slice(0,10));
     }
   });
-  const absentees = (cache.Members || []).filter(m => !(attendedSet[m.ID] && attendedSet[m.ID].size > 0));
+  const absentees = cache.Members.filter(m => !(attendedSet[m.ID] && attendedSet[m.ID].size > 0));
   const serviceLabel = serviceType || "any service";
   if (absentees.length === 0) {
     container.innerHTML = `<div class="empty">No one has missed ${threshold}+ weeks in a row for ${serviceLabel} 🎉</div>`;
@@ -1161,19 +1202,19 @@ function renderAbsentees() {
 }
 
 /* ============ PER-SERVICE ABSENTEE REPORT ============ */
+// Answers "who did we NOT mark present for this exact date + service".
 function renderServiceAbsentees() {
   const date = document.getElementById("serviceReportDate").value;
   const serviceType = document.getElementById("serviceReportType").value;
   const container = document.getElementById("serviceAbsenteeResults");
-  if (!container) return;
   if (!date) { container.innerHTML = `<div class="empty">Pick a date to generate this report</div>`; return; }
 
   const presentIds = new Set(
-    (cache.Attendance || [])
+    cache.Attendance
       .filter(a => String(a.Date).slice(0,10) === date && a.ServiceType === serviceType)
       .map(a => String(a.MemberID))
   );
-  const absentees = (cache.Members || []).filter(m => !presentIds.has(String(m.ID)));
+  const absentees = cache.Members.filter(m => !presentIds.has(String(m.ID)));
   const dateLabel = new Date(date).toLocaleDateString([], {month:"short", day:"numeric", year:"numeric"});
 
   if (absentees.length === 0) {
@@ -1218,7 +1259,7 @@ async function loadAuditLog() {
   }
 }
 
-/* ============ CSV EXPORT ============ */
+/* ============ CSV EXPORT (BACKUP) ============ */
 function toCSV(rows) {
   if (!rows || rows.length === 0) return "";
   const headers = Object.keys(rows[0]).filter(k => k !== "_row");
@@ -1246,11 +1287,11 @@ function exportCSV() {
 
 /* ============ REPORTS SNAPSHOT ============ */
 function renderSnapshot() {
-  document.getElementById("statMembers").textContent = (cache.Members || []).length;
-  document.getElementById("statVisitors").textContent = (cache.Visitors || []).length;
-  document.getElementById("statProspects").textContent = (cache.Prospects || []).length;
+  document.getElementById("statMembers").textContent = cache.Members.length;
+  document.getElementById("statVisitors").textContent = cache.Visitors.length;
+  document.getElementById("statProspects").textContent = cache.Prospects.length;
   const sundays = getSundaysDescending(1);
-  const thisWeek = (cache.Attendance || []).filter(a => sundays.includes(String(a.Date).slice(0,10)));
+  const thisWeek = cache.Attendance.filter(a => sundays.includes(String(a.Date).slice(0,10)));
   document.getElementById("statAttendanceToday").textContent = thisWeek.length;
   refreshYearFilterOptions();
   renderAnalysis();
@@ -1261,8 +1302,8 @@ function refreshYearFilterOptions() {
   if (!select) return;
   const current = select.value;
   const years = new Set();
-  (cache.Members || []).forEach(m => { if (m.JoinDate) { const y = new Date(m.JoinDate).getFullYear(); if (!isNaN(y)) years.add(y); } });
-  (cache.Attendance || []).forEach(a => { if (a.Date) { const y = new Date(a.Date).getFullYear(); if (!isNaN(y)) years.add(y); } });
+  cache.Members.forEach(m => { if (m.JoinDate) { const y = new Date(m.JoinDate).getFullYear(); if (!isNaN(y)) years.add(y); } });
+  cache.Attendance.forEach(a => { if (a.Date) { const y = new Date(a.Date).getFullYear(); if (!isNaN(y)) years.add(y); } });
   const sorted = Array.from(years).sort((a,b) => b-a);
   select.innerHTML = `<option value="all">All years</option>` + sorted.map(y => `<option value="${y}">${y}</option>`).join("");
   select.value = sorted.includes(parseInt(current)) ? current : "all";
@@ -1270,7 +1311,6 @@ function refreshYearFilterOptions() {
 
 function barChart(containerId, rows, extraClass) {
   const container = document.getElementById(containerId);
-  if (!container) return;
   if (rows.length === 0) { container.innerHTML = `<div class="empty" style="padding:10px;">No data yet</div>`; return; }
   const max = Math.max(...rows.map(r => r.count), 1);
   container.innerHTML = rows.map(r => `
@@ -1287,19 +1327,21 @@ function renderAnalysis() {
   const yearSelect = document.getElementById("analysisYear");
   const selectedYear = yearSelect ? yearSelect.value : "all";
 
+  // Attendance trend — last 8 recorded Sundays, count of unique members present
   const sundays = getSundaysDescending(8).reverse();
   const trendRows = sundays.map(dateStr => {
-    const count = (cache.Attendance || []).filter(a => String(a.Date).slice(0,10) === dateStr).length;
+    const count = cache.Attendance.filter(a => String(a.Date).slice(0,10) === dateStr).length;
     const label = new Date(dateStr).toLocaleDateString([], {month:"short", day:"numeric"});
     return { label, count };
   });
   barChart("attendanceTrendChart", trendRows);
 
+  // Membership growth — by month if a year is selected, otherwise by year
   let growthRows;
   if (selectedYear !== "all") {
     const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     growthRows = monthNames.map((label, idx) => {
-      const count = (cache.Members || []).filter(m => {
+      const count = cache.Members.filter(m => {
         if (!m.JoinDate) return false;
         const d = new Date(m.JoinDate);
         return d.getFullYear() === parseInt(selectedYear) && d.getMonth() === idx;
@@ -1308,7 +1350,7 @@ function renderAnalysis() {
     });
   } else {
     const years = {};
-    (cache.Members || []).forEach(m => {
+    cache.Members.forEach(m => {
       if (!m.JoinDate) return;
       const y = new Date(m.JoinDate).getFullYear();
       if (isNaN(y)) return;
@@ -1318,16 +1360,18 @@ function renderAnalysis() {
   }
   barChart("growthChart", growthRows);
 
+  // Department breakdown
   const depts = {};
-  (cache.Members || []).forEach(m => {
+  cache.Members.forEach(m => {
     const d = m.Department || "None";
     depts[d] = (depts[d]||0) + 1;
   });
   const deptRows = Object.keys(depts).sort((a,b) => depts[b]-depts[a]).map(d => ({ label:d, count:depts[d] }));
   barChart("deptChart", deptRows, "dept");
 
+  // Gender breakdown
   const genders = {};
-  (cache.Members || []).forEach(m => {
+  cache.Members.forEach(m => {
     const g = m.Gender || "Not specified";
     genders[g] = (genders[g]||0) + 1;
   });
@@ -1335,25 +1379,23 @@ function renderAnalysis() {
   barChart("genderChart", genderRows);
 }
 
-/* ============ POPUPS ============ */
+/* ============ POPUPS: BIRTHDAYS + ABSENTEE ALERTS ============ */
 function checkPopups() {
   const today = new Date();
-  const upcoming = (cache.Members || []).filter(m => {
+  const mm = today.getMonth()+1, dd = today.getDate();
+  const upcoming = cache.Members.filter(m => {
     if (!m.Birthdate) return false;
     const d = new Date(m.Birthdate);
     const diff = (new Date(today.getFullYear(), d.getMonth(), d.getDate()) - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000;
     return diff >= 0 && diff <= 7;
   });
   if (upcoming.length > 0) {
-    const popup = document.getElementById("popupBody");
-    if (popup) {
-      popup.innerHTML = `
-        <h3>🎉 Birthdays this week</h3>
-        ${upcoming.map(m => `<p>${fullName(m)}</p>`).join("")}
-        <button class="btn block" style="margin-top:12px;" onclick="closePopup()">Got it</button>
-      `;
-      document.getElementById("popupOverlay").classList.add("show");
-    }
+    document.getElementById("popupBody").innerHTML = `
+      <h3>🎉 Birthdays this week</h3>
+      ${upcoming.map(m => `<p>${fullName(m)}</p>`).join("")}
+      <button class="btn block" style="margin-top:12px;" onclick="closePopup()">Got it</button>
+    `;
+    document.getElementById("popupOverlay").classList.add("show");
   }
 }
 function closePopup(){ document.getElementById("popupOverlay").classList.remove("show"); }
@@ -1361,12 +1403,14 @@ function closePopup(){ document.getElementById("popupOverlay").classList.remove(
 /* ============ INIT ============ */
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("service-worker.js").then((reg) => {
-    reg.update();
+    reg.update(); // force an eager check instead of waiting on the browser's own timing
     reg.addEventListener("updatefound", () => {
       const newWorker = reg.installing;
       if (!newWorker) return;
       newWorker.addEventListener("statechange", () => {
         if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+          // A new version just took over — reload once so the update actually shows up,
+          // instead of silently sitting there until the app is closed and reopened.
           if (!sessionStorage.getItem("coc_reloaded_for_update")) {
             sessionStorage.setItem("coc_reloaded_for_update", "yes");
             window.location.reload();
@@ -1378,10 +1422,15 @@ if ("serviceWorker" in navigator) {
 }
 loadAll();
 updateQueueBadge();
+checkLock(); // called here, not earlier, so every const it can reach (forms, walkthrough, etc.) already exists
 
+// Refresh the moment the phone gets signal back — flushQueue() above already
+// runs first (registered separately), this pulls fresh data right after.
 window.addEventListener("online", () => setTimeout(() => loadAll(), 1500));
 window.addEventListener("offline", () => setSync("Offline — changes will be saved and synced later"));
 
+// Quiet background refresh every 60s while the app is open and online,
+// so two people using it during the same service catch up automatically.
 setInterval(() => { if (navigator.onLine && getQueue().length === 0) loadAll(); }, 60000);
 </script>
 </body>
